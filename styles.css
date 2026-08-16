@@ -1410,3 +1410,16 @@ main { padding-top: 8px; }
   .shopping-review-actions .spacer { display: none; }
   .shopping-review-actions button { flex: 1 1 calc(50% - 7px); }
 }
+
+
+/* V1.7 beta 3 — alphabetical shopping review */
+.shopping-review-row {
+  transition: border-color .16s ease, box-shadow .16s ease, opacity .16s ease;
+}
+.shopping-review-row.is-possible-match:not(.is-ignored) {
+  border-color: rgba(197,163,77,.58);
+  box-shadow: inset 3px 0 0 rgba(197,163,77,.72);
+}
+.shopping-review-row.is-ignored {
+  order: 2;
+}

@@ -68,6 +68,7 @@ let pendingRestoreBackup = null;
 let shoppingReviewSource = [];
 let shoppingReviewRemovedKeys = new Set();
 let shoppingReviewAutosaveTimer = null;
+let shoppingReviewSortTimer = null;
 let recipeEditorServings = 2;
 let slotPeopleSaveTimer = null;
 
@@ -1568,6 +1569,71 @@ function reconcileShoppingReviewDraft(source, draft) {
   return rows;
 }
 
+function normalizeShoppingReviewName(value = '') {
+  return normalizeText(value)
+    .replace(/[^a-z0-9à-ÿ\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function shoppingReviewNameTokens(value = '') {
+  const stop = new Set(['fresh', 'dried', 'organic', 'small', 'medium', 'large', 'extra', 'virgin', 'the', 'a', 'an']);
+  return normalizeShoppingReviewName(value).split(' ').filter(token => token && !stop.has(token));
+}
+
+function shoppingReviewNamesLookSimilar(a = '', b = '') {
+  const left = normalizeShoppingReviewName(a);
+  const right = normalizeShoppingReviewName(b);
+  if (!left || !right || left === right) return left === right && !!left;
+  if (left.includes(right) || right.includes(left)) return true;
+  const leftTokens = shoppingReviewNameTokens(left);
+  const rightTokens = shoppingReviewNameTokens(right);
+  if (!leftTokens.length || !rightTokens.length) return false;
+  const shared = leftTokens.filter(token => rightTokens.includes(token));
+  return shared.some(token => token.length >= 4) && (shared.length >= 2 || leftTokens.length === 1 || rightTokens.length === 1);
+}
+
+function refreshShoppingReviewSimilarityHints() {
+  if (!els.shoppingReviewList) return;
+  const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')];
+  rows.forEach(row => {
+    row.classList.remove('is-possible-match');
+    row.removeAttribute('data-possible-match');
+  });
+  const active = rows.filter(row => !row.classList.contains('is-ignored'));
+  for (let i = 0; i < active.length - 1; i++) {
+    const current = active[i];
+    const next = active[i + 1];
+    const currentName = current.querySelector('.shopping-review-name')?.value || '';
+    const nextName = next.querySelector('.shopping-review-name')?.value || '';
+    if (!shoppingReviewNamesLookSimilar(currentName, nextName)) continue;
+    current.classList.add('is-possible-match');
+    next.classList.add('is-possible-match');
+    current.dataset.possibleMatch = nextName;
+    next.dataset.possibleMatch = currentName;
+  }
+}
+
+function sortShoppingReviewRows() {
+  if (!els.shoppingReviewList) return;
+  const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')];
+  rows.sort((a, b) => {
+    const aIgnored = a.classList.contains('is-ignored');
+    const bIgnored = b.classList.contains('is-ignored');
+    if (aIgnored !== bIgnored) return aIgnored ? 1 : -1;
+    const aName = a.querySelector('.shopping-review-name')?.value.trim() || '';
+    const bName = b.querySelector('.shopping-review-name')?.value.trim() || '';
+    return aName.localeCompare(bName, undefined, { sensitivity: 'base', numeric: true });
+  });
+  rows.forEach(row => els.shoppingReviewList.appendChild(row));
+  refreshShoppingReviewSimilarityHints();
+}
+
+function scheduleShoppingReviewSort() {
+  clearTimeout(shoppingReviewSortTimer);
+  shoppingReviewSortTimer = setTimeout(sortShoppingReviewRows, 350);
+}
+
 function openShoppingReview() {
   shoppingReviewSource = currentShoppingReviewSource();
   if (!shoppingReviewSource.length) return toast('Shopping list is empty');
@@ -1575,6 +1641,7 @@ function openShoppingReview() {
   const rows = reconcileShoppingReviewDraft(shoppingReviewSource, draft);
   els.shoppingReviewList.innerHTML = '';
   rows.forEach(item => addShoppingReviewRow(item));
+  sortShoppingReviewRows();
   if (els.shoppingDraftStatus) {
     els.shoppingDraftStatus.textContent = draft ? 'Saved draft resumed and updated from this week' : 'Autosaves while you review';
   }
@@ -1614,6 +1681,7 @@ function addShoppingReviewRow(item, options = {}) {
   nameInput.addEventListener('input', () => {
     row.dataset.nameEdited = String(nameInput.value.trim() !== row.dataset.originalName);
     scheduleShoppingReviewAutosave();
+    scheduleShoppingReviewSort();
   });
   qtyInput.addEventListener('input', () => {
     row.dataset.quantityEdited = String(qtyInput.value.trim() !== row.dataset.originalQuantity);
@@ -1628,12 +1696,14 @@ function addShoppingReviewRow(item, options = {}) {
     checkbox.disabled = ignored;
     updateShoppingMergeToolbar();
     scheduleShoppingReviewAutosave();
+    sortShoppingReviewRows();
   };
   ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored')));
   row.querySelector('.shopping-review-remove').addEventListener('click', () => {
     for (const key of JSON.parse(row.dataset.sourceKeys || '[]')) shoppingReviewRemovedKeys.add(key);
     row.remove();
     updateShoppingMergeToolbar();
+    sortShoppingReviewRows();
     scheduleShoppingReviewAutosave();
   });
 
@@ -1732,6 +1802,7 @@ function mergeSelectedShoppingRows() {
   firstRow.querySelector('.shopping-review-checkbox').checked = false;
   rows.slice(1).forEach(row => row.remove());
   updateShoppingMergeToolbar();
+  sortShoppingReviewRows();
   saveShoppingReviewDraft(false);
   toast(`Merged ${rows.length} items as ${name}`);
 }
