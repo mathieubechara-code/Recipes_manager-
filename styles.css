@@ -1095,3 +1095,38 @@ main { padding-top: 8px; }
 .meal-slot-control.is-locked .lock-svg {
   color: #2f6d42;
 }
+
+
+/* V1.6 refinement — always-available recipe exit + pull-to-close */
+.recipe-reader-dialog {
+  will-change: transform;
+}
+.recipe-reader-actions {
+  justify-content: flex-end;
+  gap: 9px;
+}
+.recipe-reader-actions .secondary,
+.recipe-reader-actions .primary {
+  min-width: 112px;
+}
+.recipe-reader-header::before {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 5px;
+  margin: -7px auto 12px;
+  border-radius: 999px;
+  background: #d8d0c4;
+}
+@media (max-width: 520px) {
+  .recipe-reader-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .recipe-reader-actions .secondary,
+  .recipe-reader-actions .primary {
+    width: 100%;
+    min-width: 0;
+  }
+}

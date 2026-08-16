@@ -1508,6 +1508,71 @@ function editViewedRecipe() {
   openRecipe(recipe);
 }
 
+function closeViewedRecipe() {
+  els.recipeViewDialog.style.transform = '';
+  els.recipeViewDialog.style.transition = '';
+  els.recipeViewDialog.close();
+}
+
+function enableRecipePullToClose() {
+  const scroller = els.recipeReaderScroll;
+  const dialog = els.recipeViewDialog;
+  if (!scroller || !dialog || scroller.dataset.pullCloseReady === 'true') return;
+  scroller.dataset.pullCloseReady = 'true';
+
+  let startY = 0;
+  let dragY = 0;
+  let pulling = false;
+
+  scroller.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || scroller.scrollTop > 1) return;
+    startY = e.touches[0].clientY;
+    dragY = 0;
+    pulling = true;
+    dialog.style.transition = 'none';
+  }, { passive: true });
+
+  scroller.addEventListener('touchmove', e => {
+    if (!pulling || e.touches.length !== 1) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta <= 0 || scroller.scrollTop > 1) {
+      dragY = 0;
+      dialog.style.transform = '';
+      return;
+    }
+    dragY = Math.min(delta * 0.55, 150);
+    dialog.style.transform = `translateY(${dragY}px)`;
+    if (delta > 8) e.preventDefault();
+  }, { passive: false });
+
+  const finishPull = () => {
+    if (!pulling) return;
+    pulling = false;
+    dialog.style.transition = 'transform 180ms ease';
+    if (dragY >= 58) {
+      dialog.style.transform = 'translateY(120%)';
+      setTimeout(() => {
+        if (dialog.open) dialog.close();
+        dialog.style.transform = '';
+        dialog.style.transition = '';
+      }, 170);
+    } else {
+      dialog.style.transform = '';
+      setTimeout(() => { dialog.style.transition = ''; }, 190);
+    }
+    dragY = 0;
+  };
+
+  scroller.addEventListener('touchend', finishPull, { passive: true });
+  scroller.addEventListener('touchcancel', finishPull, { passive: true });
+  dialog.addEventListener('close', () => {
+    dialog.style.transform = '';
+    dialog.style.transition = '';
+    pulling = false;
+    dragY = 0;
+  });
+}
+
 function openRecipe(
   recipe = null
 ) {
@@ -2248,7 +2313,9 @@ function wireUi() {
   els.parseRecipeButton.addEventListener('click', parseAndReviewRecipe);
   els.planWeekButton.addEventListener('click', openWeekPlanner);
   els.clearVisibleWeekButton.addEventListener('click', clearVisibleWeek);
+  els.closeViewedRecipe.addEventListener('click', closeViewedRecipe);
   els.editViewedRecipe.addEventListener('click', editViewedRecipe);
+  enableRecipePullToClose();
   els.weekPlanScope.addEventListener('change', renderWeekPlanDays);
   els.selectAllWeekDays.addEventListener('click', () => setWeekPlannerSelection('all'));
   els.selectEmptyWeekDays.addEventListener('click', () => setWeekPlannerSelection('empty'));
