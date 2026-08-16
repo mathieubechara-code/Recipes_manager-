@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1624" />
+  <link rel="stylesheet" href="styles.css?v=1626" />
 </head>
 <body>
   <div id="appShell">
@@ -214,17 +214,24 @@
       <input id="recipeId" type="hidden" />
       <label>Name<input id="recipeName" required /></label>
       <div class="two-col">
-        <label>Prep time (min)<input id="prepTime" type="number" min="0" step="1" /></label>
         <label>Recipe serves<input id="recipeServings" type="number" min="1" max="30" step="1" value="2" /></label>
+        <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
       </div>
-      <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
-      <div class="two-col recipe-classification-row">
+      <div class="recipe-classification-row recipe-classification-three">
         <label>Suitable for
           <select id="recipeMealType">
             <option value="both">Lunch &amp; Dinner</option>
             <option value="lunch">Lunch only</option>
             <option value="dinner">Dinner only</option>
           </select>
+        </label>
+        <label class="timing-slider-label">
+          <span class="timing-slider-heading">
+            <span>Timing</span>
+            <output id="prepTimeValue" for="prepTime">15 min</output>
+          </span>
+          <input id="prepTime" class="timing-slider" type="range" min="1" max="30" step="1" value="15" />
+          <span class="timing-slider-scale" aria-hidden="true"><span>1 min</span><span>30 min</span></span>
         </label>
         <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
       </div>
@@ -406,6 +413,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1624"></script>
+  <script type="module" src="app.js?v=1626"></script>
 </body>
 </html>

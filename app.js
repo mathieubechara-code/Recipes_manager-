@@ -1941,8 +1941,9 @@ function openRecipe(
   els.recipeName.value =
     recipe?.name || '';
 
-  els.prepTime.value =
-    recipe?.prepTimeMin ?? '';
+  const recipePrepTime = Math.min(30, Math.max(1, Number(recipe?.prepTimeMin) || 15));
+  els.prepTime.value = String(recipePrepTime);
+  els.prepTimeValue.textContent = `${recipePrepTime} min`;
 
   els.recipeServings.value = recipeServingCount(recipe);
   recipeEditorServings = recipeServingCount(recipe);
@@ -2038,7 +2039,7 @@ async function saveRecipe(ev) {
       : 'both',
 
     prepTimeMin:
-      Number(els.prepTime.value) || 0,
+      Math.min(30, Math.max(1, Number(els.prepTime.value) || 15)),
 
     servings:
       Math.max(1, Number(els.recipeServings.value) || 2),
@@ -2724,6 +2725,12 @@ function wireUi() {
 
   els.recipeServings.addEventListener('input', updateRecipeServingsAndQuantities);
   els.recipeServings.addEventListener('change', updateRecipeServingsAndQuantities);
+
+  const updatePrepTimeLabel = () => {
+    els.prepTimeValue.textContent = `${els.prepTime.value} min`;
+  };
+  els.prepTime.addEventListener('input', updatePrepTimeLabel);
+  els.prepTime.addEventListener('change', updatePrepTimeLabel);
 
   els.recipeForm.addEventListener(
     'submit',

@@ -1201,3 +1201,45 @@ main { padding-top: 8px; }
   .shopping-review-toolbar { align-items: flex-start; flex-direction: column; }
   .shopping-review-toolbar button { width: 100%; }
 }
+
+
+/* V1.6 recipe timing slider */
+.recipe-classification-three {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(170px, 1.15fr) minmax(0, 1.15fr);
+  gap: 12px;
+  align-items: end;
+}
+.timing-slider-label { gap: 8px; }
+.timing-slider-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.timing-slider-heading output {
+  color: var(--sage-dark);
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.timing-slider {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none !important;
+  accent-color: var(--sage);
+  cursor: pointer;
+}
+.timing-slider:focus { border: 0; box-shadow: none; }
+.timing-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .recipe-classification-three { grid-template-columns: 1fr; gap: 0; }
+}
