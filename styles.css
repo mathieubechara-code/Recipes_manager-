@@ -112,3 +112,79 @@ dialog::backdrop { background: rgba(58,50,41,.35); backdrop-filter: blur(3px); }
   .two-col { grid-template-columns: 1fr; }
   .ingredient-row { grid-template-columns: 1fr 76px 64px 34px; }
 }
+
+/* v1.1 additions */
+.week-actions-card,
+.backup-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.week-actions-card p,
+.backup-card p { margin: 5px 0 0; }
+.compact-actions { justify-content: flex-end; }
+.preset-row { margin: 12px 0; }
+.week-plan-days { display: grid; gap: 8px; margin: 12px 0 16px; }
+.week-plan-day {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.week-plan-day input { width: auto; }
+.week-plan-day span { display: grid; gap: 2px; }
+.week-plan-day small { color: var(--muted); font-weight: 500; }
+.restore-options { display: grid; gap: 9px; margin: 14px 0; }
+.radio-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.radio-row input { width: auto; margin-top: 3px; }
+.radio-row span { display: grid; gap: 3px; }
+.radio-row small { color: var(--muted); font-weight: 500; }
+.ingredient-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+.ingredient-fields {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px 40px;
+  gap: 7px;
+  align-items: center;
+}
+.ingredient-fields button {
+  border: 0;
+  background: transparent;
+  color: var(--terracotta);
+  font-size: 1.2rem;
+}
+.ingredient-group-label {
+  margin: 6px 2px 0;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--sage-dark);
+}
+@media (max-width: 520px) {
+  .week-actions-card,
+  .backup-card { align-items: stretch; flex-direction: column; }
+  .week-actions-card > button { width: 100%; }
+  .compact-actions { width: 100%; }
+  .compact-actions button { flex: 1; }
+  .ingredient-fields { grid-template-columns: 1fr 72px 66px 34px; }
+}

@@ -53,6 +53,7 @@ let settings = {
 let weekStart = startOfWeek(new Date());
 let currentSlotDate = null;
 let unsubscribers = [];
+let pendingRestoreBackup = null;
 
 
 /* -------------------------------------------------------
@@ -196,6 +197,209 @@ async function sha256(text) {
     .join('');
 }
 
+
+/* -------------------------------------------------------
+   Recipe parser
+------------------------------------------------------- */
+
+function decodeNotesText(text = '') {
+  const area = document.createElement('textarea');
+  area.innerHTML = text;
+  return area.value
+    .replace(/&#x9;|&#9;/gi, '\t')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\*\*/g, '')
+    .replace(/__+/g, '')
+    .replace(/^\s*⸻\s*$/gm, '')
+    .replace(/\t+/g, ' ')
+    .replace(/[ ]{2,}/g, ' ')
+    .trim();
+}
+
+function cleanRecipeLine(line = '') {
+  return line
+    .replace(/^\s*[•*·▪◦-]\s+/, '')
+    .replace(/^\s*(\d+)\\\.\s*/, '$1. ')
+    .replace(/^\s*(\d+)\ufe0f?\u20e3\s*/, '$1. ')
+    .replace(/^\s*([①②③④⑤⑥⑦⑧⑨⑩])\s*/, m => ({'①':'1. ','②':'2. ','③':'3. ','④':'4. ','⑤':'5. ','⑥':'6. ','⑦':'7. ','⑧':'8. ','⑨':'9. ','⑩':'10. '}[m.trim()] || m))
+    .trim();
+}
+
+function headingKind(line = '') {
+  const t = normalizeText(line.replace(/[:：]$/, ''));
+  if (/^(ingredients?|ingr[eé]dients?)$/.test(t)) return 'ingredients';
+  if (/^(instructions?|preparation|préparation|method|méthode|directions?)$/.test(t)) return 'instructions';
+  if (/^(preparation|préparation)\s+(du|de la|des|of|for)\b/.test(t)) return 'instruction-subheading';
+  return '';
+}
+
+const UNIT_PATTERNS = [
+  'c\\.?\\s*à\\s*soupe', 'cuill(?:ère|ere)s?\\s+à\\s+soupe',
+  'c\\.?\\s*à\\s*café', 'cuill(?:ère|ere)s?\\s+à\\s+café',
+  'tablespoons?', 'tablespoons?', 'tbsp', 'tbs',
+  'teaspoons?', 'tsp',
+  'kilograms?', 'kgs?', 'kg', 'grams?', 'gr', 'g',
+  'millilit(?:er|re)s?', 'ml', 'centilit(?:er|re)s?', 'cl', 'lit(?:er|re)s?', 'l',
+  'ounces?', 'oz', 'pounds?', 'lbs?',
+  'cups?', 'verres?', 'cloves?', 'gousses?', 'cubes?', 'cans?', 'boîtes?', 'boites?',
+  'packages?', 'packs?', 'sachets?', 'slices?', 'tranches?', 'pinches?', 'pincées?', 'pincees?',
+  'pieces?', 'morceaux?'
+];
+
+function normalizeFractionToken(token = '') {
+  return token
+    .replace(/½/g, '1/2')
+    .replace(/¼/g, '1/4')
+    .replace(/¾/g, '3/4')
+    .replace(/⅓/g, '1/3')
+    .replace(/⅔/g, '2/3')
+    .replace(/⅛/g, '1/8')
+    .replace(/⅜/g, '3/8')
+    .replace(/⅝/g, '5/8')
+    .replace(/⅞/g, '7/8');
+}
+
+function parseIngredientLine(rawLine, group = '') {
+  let line = cleanRecipeLine(rawLine);
+  line = normalizeFractionToken(line);
+  if (!line) return null;
+
+  const qtyPattern = '(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:[.,]\\d+)?)(?:\\s*[–—-]\\s*(?:\\d+\\/\\d+|\\d+(?:[.,]\\d+)?))?';
+  const unitPattern = `(?:${UNIT_PATTERNS.join('|')})`;
+  const re = new RegExp(`^(${qtyPattern})(?:\\s*)(${unitPattern})?(?=\\s|$)(?:\\s+(?:de\\s+|d['’]\\s*|of\\s+)|\\s+)?(.*)$`, 'i');
+  const match = line.match(re);
+
+  if (!match) {
+    return { name: line, quantity: '', unit: '', group };
+  }
+
+  let quantity = match[1].replace(/\s*[–—-]\s*/g, '–').replace(',', '.').trim();
+  let unit = (match[2] || '').trim();
+  let name = (match[3] || '').trim();
+
+  if (!name) {
+    name = unit;
+    unit = '';
+  }
+
+  // Words like "medium" are descriptors, not units, and remain in the name.
+  return { name, quantity, unit, group };
+}
+
+function inferRecipeTags(title = '', text = '') {
+  const hay = normalizeText(`${title} ${text}`);
+  const tags = new Set(['imported']);
+  const rules = [
+    ['chicken', /\b(chicken|poulet)\b/],
+    ['beef', /\b(beef|boeuf|bœuf)\b/],
+    ['pork', /\b(pork|porc)\b/],
+    ['fish', /\b(fish|salmon|saumon|thon|tuna)\b/],
+    ['pasta', /\b(pasta|pâtes|pates|spaghetti|linguine|penne)\b/],
+    ['rice', /\b(rice|riz)\b/],
+    ['vegetarian', /\b(vegetarian|végétarien|vegetarien)\b/]
+  ];
+  rules.forEach(([tag, re]) => { if (re.test(hay)) tags.add(tag); });
+  return [...tags];
+}
+
+function parseRecipeText(rawText) {
+  const text = decodeNotesText(rawText);
+  const rawLines = text.split('\n');
+  const lines = rawLines.map((raw, index) => ({
+    raw,
+    clean: cleanRecipeLine(raw),
+    bullet: /^\s*[•*·▪◦-]\s+/.test(raw),
+    index
+  })).filter(x => x.clean);
+
+  if (!lines.length) throw new Error('Paste a recipe first.');
+
+  let title = '';
+  let section = 'title';
+  let ingredientGroup = '';
+  const ingredients = [];
+  const instructionLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const item = lines[i];
+    const kind = headingKind(item.clean);
+
+    if (kind === 'ingredients') {
+      section = 'ingredients';
+      ingredientGroup = '';
+      continue;
+    }
+    if (kind === 'instructions') {
+      section = 'instructions';
+      continue;
+    }
+    if (kind === 'instruction-subheading' && section === 'ingredients') {
+      section = 'instructions';
+      instructionLines.push(item.clean);
+      continue;
+    }
+
+    if (section === 'title') {
+      if (!title) title = item.clean.replace(/^\p{Extended_Pictographic}+\s*/u, '').trim();
+      continue;
+    }
+
+    if (section === 'ingredients') {
+      const next = lines[i + 1];
+      const looksLikeGroup = !item.bullet && next?.bullet && !/^(\d|1\/|[½¼¾⅓⅔⅛⅜⅝⅞])/.test(item.clean);
+      if (looksLikeGroup) {
+        ingredientGroup = item.clean.replace(/[:：]$/, '').trim();
+        continue;
+      }
+      const parsed = parseIngredientLine(item.raw, ingredientGroup);
+      if (parsed) ingredients.push(parsed);
+      continue;
+    }
+
+    if (section === 'instructions') {
+      if (kind === 'instruction-subheading') {
+        instructionLines.push(item.clean);
+        continue;
+      }
+      const normalized = item.bullet && !/^\d+\.\s/.test(item.clean) ? `• ${item.clean}` : item.clean;
+      instructionLines.push(normalized);
+    }
+  }
+
+  // If headings were absent, use the first non-empty line as title and preserve the rest as instructions.
+  if (!ingredients.length && !instructionLines.length) {
+    title = lines[0].clean.replace(/^\p{Extended_Pictographic}+\s*/u, '').trim();
+    instructionLines.push(...lines.slice(1).map(x => x.clean));
+  }
+
+  return {
+    name: title || 'Imported recipe',
+    tags: inferRecipeTags(title, text),
+    prepTimeMin: 0,
+    photoUrl: '',
+    ingredients,
+    instructions: instructionLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  };
+}
+
+function openImportRecipe() {
+  els.importRecipeText.value = '';
+  els.importRecipeDialog.showModal();
+}
+
+function parseAndReviewRecipe() {
+  try {
+    const parsed = parseRecipeText(els.importRecipeText.value);
+    els.importRecipeDialog.close();
+    openRecipe(parsed);
+    toast(`Parsed ${parsed.ingredients.length} ingredients — review before saving`);
+  } catch (err) {
+    toast(err.message || 'Could not parse recipe');
+  }
+}
 
 /* -------------------------------------------------------
    Firebase + App Check
@@ -886,16 +1090,24 @@ function addIngredientRow(
   ing = {
     name: '',
     quantity: '',
-    unit: ''
+    unit: '',
+    group: ''
   }
 ) {
-  const row =
-    document.createElement('div');
+  const row = document.createElement('div');
+  row.className = 'ingredient-row';
+  row.dataset.group = ing.group || '';
 
-  row.className =
-    'ingredient-row';
+  if (ing.group) {
+    const groupLabel = document.createElement('div');
+    groupLabel.className = 'ingredient-group-label';
+    groupLabel.textContent = ing.group;
+    row.appendChild(groupLabel);
+  }
 
-  row.innerHTML = `
+  const fields = document.createElement('div');
+  fields.className = 'ingredient-fields';
+  fields.innerHTML = `
     <input
       class="ing-name"
       placeholder="ingredient"
@@ -904,7 +1116,7 @@ function addIngredientRow(
 
     <input
       class="ing-qty"
-      inputmode="decimal"
+      inputmode="text"
       placeholder="qty"
       value="${escapeHtml(String(ing.quantity ?? ''))}"
     >
@@ -923,16 +1135,10 @@ function addIngredientRow(
     </button>
   `;
 
-  row
-    .querySelector('button')
-    .addEventListener(
-      'click',
-      () => row.remove()
-    );
-
+  fields.querySelector('button').addEventListener('click', () => row.remove());
+  row.appendChild(fields);
   els.ingredientRows.appendChild(row);
 }
-
 
 function openRecipe(
   recipe = null
@@ -1018,7 +1224,9 @@ async function saveRecipe(ev) {
             row
               .querySelector('.ing-unit')
               .value
-              .trim()
+              .trim(),
+
+          group: row.dataset.group || ''
         };
       })
       .filter(i => i.name);
@@ -1399,6 +1607,183 @@ async function removeMeal() {
 
 
 /* -------------------------------------------------------
+   Week planner
+------------------------------------------------------- */
+
+function renderWeekPlanDays() {
+  els.weekPlanDays.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(weekStart, i);
+    const slot = scheduleFor(date);
+    const recipe = slot && recipeById(slot.recipeId);
+    const label = document.createElement('label');
+    label.className = 'week-plan-day';
+    label.innerHTML = `
+      <input type="checkbox" data-date="${iso(date)}" ${slot ? '' : 'checked'}>
+      <span>
+        <strong>${date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
+        <small>${recipe ? escapeHtml(recipe.name) : 'Empty'}</small>
+      </span>
+    `;
+    els.weekPlanDays.appendChild(label);
+  }
+}
+
+function openWeekPlanner() {
+  renderWeekPlanDays();
+  els.replaceExistingWeekMeals.checked = false;
+  els.weekPlanReason.textContent = '';
+  els.weekPlanDialog.showModal();
+}
+
+function setWeekPlannerSelection(mode) {
+  [...els.weekPlanDays.querySelectorAll('input[type="checkbox"]')].forEach(cb => {
+    if (mode === 'all') cb.checked = true;
+    if (mode === 'clear') cb.checked = false;
+    if (mode === 'empty') cb.checked = !scheduleFor(parseIsoLocal(cb.dataset.date));
+  });
+}
+
+function exclusionReasonAgainst(recipe, date, scheduleState) {
+  const dateIso = iso(date);
+  const targetDow = date.getDay();
+  const cutoff = addDays(date, -(settings.repeatWeeks || 0) * 7);
+  const repeatedSameDow = scheduleState.some(s => {
+    if (s.recipeId !== recipe.id || s.date === dateIso) return false;
+    const d = parseIsoLocal(s.date);
+    return d.getDay() === targetDow && d < date && d >= cutoff;
+  });
+  if (repeatedSameDow) return `Used on this weekday in the last ${settings.repeatWeeks} weeks`;
+  if (settings.avoidSameWeek) {
+    const ws = startOfWeek(date), we = addDays(ws, 6);
+    const inWeek = scheduleState.some(s => s.recipeId === recipe.id && s.date !== dateIso && s.date >= iso(ws) && s.date <= iso(we));
+    if (inWeek) return 'Already scheduled this week';
+  }
+  return '';
+}
+
+async function suggestWeekDays() {
+  if (!recipes.length) return toast('Add a recipe first');
+  const selected = [...els.weekPlanDays.querySelectorAll('input[type="checkbox"]:checked')]
+    .map(cb => parseIsoLocal(cb.dataset.date))
+    .sort((a, b) => a - b);
+  if (!selected.length) return toast('Select at least one day');
+
+  const replaceExisting = els.replaceExistingWeekMeals.checked;
+  const workingSchedule = schedule.map(s => ({ ...s }));
+  let added = 0;
+  let skipped = 0;
+
+  for (const date of selected) {
+    const dateIso = iso(date);
+    const current = workingSchedule.find(s => s.date === dateIso && s.meal === 'dinner');
+    if (current && !replaceExisting) {
+      skipped++;
+      continue;
+    }
+
+    const scheduleForEligibility = workingSchedule.filter(s => !(s.date === dateIso && s.meal === 'dinner'));
+    const eligible = recipes.filter(r => !exclusionReasonAgainst(r, date, scheduleForEligibility));
+    if (!eligible.length) {
+      skipped++;
+      continue;
+    }
+
+    const picked = eligible[Math.floor(Math.random() * eligible.length)];
+    const slotId = `${dateIso}_dinner`;
+    const nextSlot = { date: dateIso, meal: 'dinner', recipeId: picked.id, status: 'suggested' };
+    await setDoc(doc(db, 'households', householdId, 'schedule', slotId), { ...nextSlot, updatedAt: serverTimestamp() }, { merge: true });
+
+    const idx = workingSchedule.findIndex(s => s.date === dateIso && s.meal === 'dinner');
+    if (idx >= 0) workingSchedule[idx] = { ...workingSchedule[idx], ...nextSlot };
+    else workingSchedule.push(nextSlot);
+    added++;
+  }
+
+  els.weekPlanDialog.close();
+  toast(`Suggested ${added} day${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
+}
+
+/* -------------------------------------------------------
+   Recipe backup / restore
+------------------------------------------------------- */
+
+function recipeBackupPayload() {
+  return {
+    schema: 'kitchen-week.recipes.v1',
+    exportedAt: new Date().toISOString(),
+    recipeCount: recipes.length,
+    recipes: recipes.map(({ id, ...data }) => ({ id, ...data }))
+  };
+}
+
+function downloadRecipeBackup() {
+  const payload = recipeBackupPayload();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kitchen-week-recipes-${iso(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Backed up ${recipes.length} recipes`);
+}
+
+function chooseRestoreFile() {
+  els.restoreRecipeFile.value = '';
+  els.restoreRecipeFile.click();
+}
+
+async function readRestoreFile(ev) {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.schema !== 'kitchen-week.recipes.v1' || !Array.isArray(data.recipes)) {
+      throw new Error('This is not a Kitchen Week recipe backup.');
+    }
+    pendingRestoreBackup = data;
+    els.restoreSummary.textContent = `${data.recipes.length} recipes found in backup${data.exportedAt ? ` from ${new Date(data.exportedAt).toLocaleString()}` : ''}.`;
+    els.restoreDialog.showModal();
+  } catch (err) {
+    pendingRestoreBackup = null;
+    toast(err.message || 'Could not read backup file');
+  }
+}
+
+function firestoreSafeRecipe(recipe) {
+  const clean = { ...recipe };
+  delete clean.id;
+  // Firestore export timestamps become plain objects in JSON; replacing them avoids type errors.
+  clean.restoredAt = serverTimestamp();
+  delete clean.createdAt;
+  delete clean.updatedAt;
+  return clean;
+}
+
+async function restoreRecipesFromBackup() {
+  if (!pendingRestoreBackup) return;
+  const mode = document.querySelector('input[name="restoreMode"]:checked')?.value || 'merge';
+  if (mode === 'replace') {
+    const ok = confirm('Replace all current recipes with this backup? Your meal schedule will not be deleted.');
+    if (!ok) return;
+    await Promise.all(recipes.map(r => deleteDoc(doc(db, 'households', householdId, 'recipes', r.id))));
+  }
+
+  let restored = 0;
+  for (const recipe of pendingRestoreBackup.recipes) {
+    const id = recipe.id || uuid();
+    await setDoc(doc(db, 'households', householdId, 'recipes', id), firestoreSafeRecipe(recipe), { merge: mode === 'merge' });
+    restored++;
+  }
+  pendingRestoreBackup = null;
+  els.restoreDialog.close();
+  toast(`Restored ${restored} recipes`);
+}
+
+/* -------------------------------------------------------
    Settings
 ------------------------------------------------------- */
 
@@ -1646,6 +2031,18 @@ function wireUi() {
     'click',
     () => openRecipe()
   );
+
+  els.importRecipeButton.addEventListener('click', openImportRecipe);
+  els.parseRecipeButton.addEventListener('click', parseAndReviewRecipe);
+  els.planWeekButton.addEventListener('click', openWeekPlanner);
+  els.selectAllWeekDays.addEventListener('click', () => setWeekPlannerSelection('all'));
+  els.selectEmptyWeekDays.addEventListener('click', () => setWeekPlannerSelection('empty'));
+  els.clearWeekDays.addEventListener('click', () => setWeekPlannerSelection('clear'));
+  els.suggestSelectedDays.addEventListener('click', suggestWeekDays);
+  els.downloadRecipeBackup.addEventListener('click', downloadRecipeBackup);
+  els.restoreRecipeBackup.addEventListener('click', chooseRestoreFile);
+  els.restoreRecipeFile.addEventListener('change', readRestoreFile);
+  els.confirmRestoreRecipes.addEventListener('click', restoreRecipesFromBackup);
 
   els.addIngredient.addEventListener(
     'click',

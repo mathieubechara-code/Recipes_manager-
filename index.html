@@ -20,7 +20,7 @@
     <main>
       <section id="connectPanel" class="card connect-card">
         <h2>Connect your kitchen</h2>
-        <p>Enter the same household phrase on both iPhones. It stays on-device; only a hash is used as the shared data key.</p>
+        <p>Enter the same household phrase on each iPhone. It stays on-device; only a hash is used as the shared data key.</p>
         <label>Household phrase
           <input id="householdPhrase" type="password" autocomplete="current-password" placeholder="e.g. rosemary-table-27" />
         </label>
@@ -47,6 +47,15 @@
               <button id="nextWeek" class="secondary" aria-label="Next week">→</button>
             </div>
           </div>
+
+          <div class="card week-actions-card">
+            <div>
+              <strong>Need ideas for several days?</strong>
+              <p class="muted small">Suggest the whole week or choose only the days you want. Existing meals are left alone unless you choose to replace them.</p>
+            </div>
+            <button id="planWeekButton" class="primary">Plan week</button>
+          </div>
+
           <div id="weekGrid" class="week-grid"></div>
         </section>
 
@@ -56,12 +65,29 @@
               <p class="eyebrow">Recipe box</p>
               <h2>Recipes</h2>
             </div>
-            <button id="addRecipeButton" class="primary">+ Add</button>
+            <div class="button-row compact-actions">
+              <button id="importRecipeButton" class="secondary">Paste recipe</button>
+              <button id="addRecipeButton" class="primary">+ Add</button>
+            </div>
           </div>
+
           <div class="filters card">
             <input id="recipeSearch" type="search" placeholder="Search recipes or tags" />
             <select id="tagFilter"><option value="">All tags</option></select>
           </div>
+
+          <div class="card backup-card">
+            <div>
+              <strong>Recipe backup</strong>
+              <p class="muted small">Download all recipes as JSON, or restore a previous Kitchen Week recipe backup.</p>
+            </div>
+            <div class="button-row">
+              <button id="downloadRecipeBackup" class="secondary">Download JSON</button>
+              <button id="restoreRecipeBackup" class="secondary">Restore JSON</button>
+              <input id="restoreRecipeFile" type="file" accept="application/json,.json" hidden />
+            </div>
+          </div>
+
           <div id="recipeGrid" class="recipe-grid"></div>
         </section>
 
@@ -106,12 +132,33 @@
         <div class="inline-heading"><strong>Ingredients</strong><button id="addIngredient" type="button" class="text-button">+ ingredient</button></div>
         <div id="ingredientRows" class="ingredient-rows"></div>
       </div>
-      <label>Instructions<textarea id="instructions" rows="7" placeholder="Write the method here…"></textarea></label>
+      <label>Instructions<textarea id="instructions" rows="9" placeholder="Write the method here…"></textarea></label>
       <div class="dialog-actions">
         <button id="deleteRecipe" type="button" class="danger" hidden>Delete</button>
         <span class="spacer"></span>
         <button type="button" class="secondary close-dialog">Cancel</button>
         <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="importRecipeDialog">
+    <form method="dialog" class="dialog-form" id="importRecipeForm">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow">Apple Notes friendly</p>
+          <h2>Paste a recipe</h2>
+        </div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="muted small">Paste the recipe exactly as it appears in Notes. English and French headings, bullets, ranges, fractions and grouped ingredients are supported. You will review everything before saving.</p>
+      <label>Recipe text
+        <textarea id="importRecipeText" rows="16" placeholder="Paste your recipe here…"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button id="parseRecipeButton" type="button" class="primary">Parse & review</button>
       </div>
     </form>
   </dialog>
@@ -125,10 +172,58 @@
       <input id="slotSearch" type="search" placeholder="Find a recipe" />
       <div id="slotRecipeList" class="slot-recipe-list"></div>
       <div class="dialog-actions wrap">
-        <button id="suggestMeal" type="button" class="primary">Suggest for me</button>
+        <button id="suggestMeal" type="button" class="primary">Suggest this day</button>
         <button id="removeMeal" type="button" class="secondary">Remove meal</button>
       </div>
       <p id="suggestionReason" class="muted small"></p>
+    </form>
+  </dialog>
+
+  <dialog id="weekPlanDialog">
+    <form method="dialog" class="dialog-form" id="weekPlanForm">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow">Suggestions</p>
+          <h2>Plan this week</h2>
+        </div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="muted small">Choose the dinner slots Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you choose to keep them.</p>
+      <div class="button-row preset-row">
+        <button id="selectAllWeekDays" type="button" class="secondary">Select all</button>
+        <button id="selectEmptyWeekDays" type="button" class="secondary">Select empty days</button>
+        <button id="clearWeekDays" type="button" class="secondary">Clear</button>
+      </div>
+      <div id="weekPlanDays" class="week-plan-days"></div>
+      <label class="checkbox-row"><input id="replaceExistingWeekMeals" type="checkbox" /> Replace meals already scheduled on selected days</label>
+      <p id="weekPlanReason" class="muted small"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button id="suggestSelectedDays" type="button" class="primary">Suggest selected days</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="restoreDialog">
+    <form method="dialog" class="dialog-form">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow">Recipe backup</p>
+          <h2>Restore recipes</h2>
+        </div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <p id="restoreSummary" class="muted"></p>
+      <div class="restore-options">
+        <label class="radio-row"><input type="radio" name="restoreMode" value="merge" checked /> <span><strong>Merge</strong><small>Restore backup recipes and keep recipes currently in Kitchen Week.</small></span></label>
+        <label class="radio-row"><input type="radio" name="restoreMode" value="replace" /> <span><strong>Replace recipes</strong><small>Delete current recipes first, then restore this backup. Meal schedule entries are kept.</small></span></label>
+      </div>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button id="confirmRestoreRecipes" type="button" class="primary">Restore</button>
+      </div>
     </form>
   </dialog>
 
@@ -141,7 +236,7 @@
       <label>Anti-repeat window (weeks)<input id="repeatWeeks" type="number" min="0" max="52" step="1" value="4" /></label>
       <label class="checkbox-row"><input id="avoidSameWeek" type="checkbox" checked /> Avoid any recipe already scheduled in the same week</label>
       <label>Apple Shortcut name<input id="shortcutName" value="Kitchen Week to Reminders" /></label>
-      <p class="muted small">Both phones should create a Shortcut with this exact name. The app copies a newline list to the clipboard, then launches the Shortcut with clipboard input.</p>
+      <p class="muted small">Each phone should create a Shortcut with this exact name. The app copies a newline list to the clipboard, then launches the Shortcut with clipboard input.</p>
       <div class="dialog-actions">
         <button id="disconnectButton" type="button" class="danger">Disconnect</button>
         <span class="spacer"></span>
