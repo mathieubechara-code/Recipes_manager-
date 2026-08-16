@@ -775,11 +775,14 @@ function renderTodayMeal(date, meal) {
   const slot = scheduleFor(date, meal);
   const recipe = slot && recipeById(slot.recipeId);
   const card = document.createElement('article');
-  card.className = `card today-meal-card${slot ? ' has-meal' : ''}${slotIsLocked(slot) ? ' is-locked' : ''}`;
+  card.className = `card today-meal-card meal-${meal}${slot ? ' has-meal' : ''}${slotIsLocked(slot) ? ' is-locked' : ''}`;
 
   card.innerHTML = `
     <div class="today-meal-topline">
-      <span class="today-meal-label">${mealLabel(meal)}</span>
+      <div class="today-meal-kind">
+        <span class="today-meal-icon" aria-hidden="true">${meal === 'lunch' ? '☀' : '☾'}</span>
+        <span class="today-meal-label">${mealLabel(meal)}</span>
+      </div>
       ${statusMarkup(slot)}
     </div>
     ${recipe
@@ -787,7 +790,8 @@ function renderTodayMeal(date, meal) {
            <span class="today-recipe-name">${escapeHtml(recipe.name)}</span>
            <span class="recipe-tap-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
          </button>
-         <div class="today-meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}${slotIsLocked(slot) ? `${recipe.prepTimeMin ? ' · ' : ''}🔒 Locked` : ''}</div>
+         <div class="today-meal-meta">${slotIsLocked(slot) ? '🔒 Locked' : ''}</div>
+         <div class="today-meal-divider" aria-hidden="true"></div>
          <div class="today-meal-actions" role="group" aria-label="${mealLabel(meal)} actions">
            <button type="button" class="meal-action today-lock-meal ${slotIsLocked(slot) ? 'is-active' : ''}" title="${slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal'}"><span aria-hidden="true">🔒</span><span>${slotIsLocked(slot) ? 'Unlock' : 'Lock'}</span></button>
            <button type="button" class="meal-action today-regenerate-meal" ${slotIsLocked(slot) ? 'disabled' : ''} title="Regenerate this meal"><span aria-hidden="true">↻</span><span>Regenerate</span></button>

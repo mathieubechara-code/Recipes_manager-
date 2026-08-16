@@ -529,3 +529,181 @@ dialog::backdrop { background: rgba(58,50,41,.35); backdrop-filter: blur(3px); }
   .status-guide-text { display: none; }
   .meal-view-hint { font-size: .72rem; }
 }
+
+/* V1.6 approved mockup — visual lock */
+:root {
+  --mock-green: #0f4f36;
+  --mock-green-2: #2f7d32;
+  --mock-orange: #c96625;
+  --mock-paper: #fffdf9;
+  --mock-line: #e6ded3;
+}
+
+body {
+  background: #fbf8f1;
+}
+
+.mockup-topbar {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 22px 24px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: rgba(251,248,241,.96);
+  border-bottom: 0;
+}
+.brand-lockup { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.brand-icon { width: 58px; height: 58px; flex: 0 0 58px; object-fit: contain; }
+.brand-copy { display: grid; gap: 3px; min-width: 0; }
+.brand-copy h1 { margin: 0; color: var(--mock-green); font-family: Georgia, 'Times New Roman', serif; font-size: clamp(1.75rem, 5vw, 2.3rem); line-height: .98; }
+.brand-copy .eyebrow { order: 2; margin: 0; color: #ba694d; font-size: .72rem; letter-spacing: .18em; }
+.settings-square { width: 50px; height: 50px; border-radius: 15px; background: #f4efe6; box-shadow: none; }
+.how-to-button { min-height: 50px; padding: 0 18px; border: 2px solid #8b9289; box-shadow: none; background: #fff; font-size: .98rem; }
+
+main { padding-top: 8px; }
+.mockup-tabs {
+  position: static;
+  z-index: auto;
+  margin: 0 0 36px;
+  padding: 0;
+  height: 74px;
+  background: #fff;
+  border: 1px solid var(--mock-line);
+  border-radius: 17px;
+  box-shadow: 0 8px 24px rgba(61,49,31,.06);
+  overflow: hidden;
+  gap: 0;
+}
+.mockup-tabs .tab {
+  height: 100%;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #3f413d;
+  font-size: .98rem;
+  font-weight: 750;
+  position: relative;
+}
+.mockup-tabs .tab.active { color: var(--mock-green-2); background: transparent; box-shadow: none; }
+.mockup-tabs .tab.active::after {
+  content: '';
+  position: absolute;
+  left: 17%; right: 17%; bottom: 0;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--mock-green-2);
+}
+.tab-icon { font-size: 1.15rem; line-height: 1; }
+
+.today-date-block { display: grid; justify-items: center; gap: 14px; margin: 0 auto 30px; }
+.today-date-nav { display: grid; grid-template-columns: 58px minmax(190px, 260px) 58px; align-items: center; gap: 18px; }
+.date-arrow, .date-center {
+  min-height: 58px;
+  border: 1px solid var(--mock-line);
+  background: #fff;
+  color: #2f312c;
+  box-shadow: 0 5px 16px rgba(61,49,31,.04);
+}
+.date-arrow { width: 58px; padding: 0; border-radius: 17px; font-size: 1.75rem; font-weight: 500; }
+.date-center { border-radius: 17px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 0 20px; font-size: 1.2rem; font-weight: 800; }
+.date-calendar { color: var(--mock-green); font-size: 1.2rem; }
+.date-chevron { color: #252822; font-size: 1.1rem; }
+.today-date-text { margin: 0; color: #5c5b57; font-size: 1.03rem; }
+
+.today-meals { display: grid; gap: 22px; }
+.today-meal-card {
+  padding: 22px 24px 24px;
+  border: 1px solid var(--mock-line);
+  border-radius: 20px;
+  background: rgba(255,253,249,.98);
+  box-shadow: 0 8px 22px rgba(61,49,31,.055);
+}
+.today-meal-card.is-locked { box-shadow: 0 8px 22px rgba(61,49,31,.055); }
+.today-meal-topline { margin: 0 0 24px; align-items: center; }
+.today-meal-kind { display: flex; align-items: center; gap: 12px; }
+.today-meal-icon { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: white; font-size: 1.45rem; font-weight: 800; }
+.meal-lunch .today-meal-icon { background: #3d973f; }
+.meal-dinner .today-meal-icon { background: var(--mock-orange); }
+.today-meal-label { font-size: .9rem; letter-spacing: .08em; color: #3c8b3d; }
+.meal-dinner .today-meal-label { color: var(--mock-orange); }
+.status-pill { border-radius: 999px; padding: 8px 15px; font-size: .83rem; font-weight: 800; }
+.status-suggested, .status-confirmed { background: #edf6e6; color: #39802d; }
+
+.today-recipe-link { gap: 9px; padding: 0; }
+.today-recipe-name { color: #292c26; font-size: clamp(1.8rem, 6vw, 2.35rem); line-height: 1.08; }
+.recipe-tap-hint { color: #74736e; font-size: .95rem; font-weight: 500; }
+.recipe-tap-hint > span { color: #585b56; font-size: 1.3rem; margin-left: 4px; }
+.today-meal-meta { min-height: 0; margin: 10px 0 0; color: #4d6a52; font-size: .76rem; font-weight: 700; }
+.today-meal-divider { height: 1px; background: var(--mock-line); margin: 24px 0 17px; }
+.today-meal-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 0; }
+.meal-action {
+  min-height: 55px;
+  padding: 8px 8px;
+  border: 1px solid var(--mock-line);
+  border-radius: 14px;
+  background: #fffdf9;
+  color: var(--mock-green);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 7px;
+  font-size: .77rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.meal-action > span:first-child { font-size: 1.15rem; }
+.meal-action.is-active { background: #eef5eb; border-color: #a8bba2; }
+.meal-action.danger-action { color: #dc1f19; background: #fffdfa; }
+.today-empty { margin: 0 0 14px; background: #faf7f0; }
+
+/* Week uses the same status language but stays compact */
+.status-guide { display: none; }
+.week-actions-card { border-radius: 18px; }
+.day-card { border-radius: 18px; border-color: var(--mock-line); box-shadow: 0 5px 16px rgba(61,49,31,.04); }
+.meal-slot-header .status-pill { padding: 5px 9px; font-size: .66rem; }
+.meal-slot.is-locked { background: linear-gradient(90deg, rgba(61,151,63,.07), transparent 60%); border-radius: 12px; }
+.meal-slot-control { border-color: var(--mock-line); background: #fff; color: var(--mock-green); }
+.meal-slot-remove { color: #dc1f19; }
+
+@media (min-width: 760px) {
+  .today-meals { grid-template-columns: 1fr; max-width: 790px; margin: 0 auto; }
+  .today-date-block { max-width: 790px; }
+}
+
+@media (max-width: 620px) {
+  .mockup-topbar { padding: 18px 14px 15px; }
+  .brand-icon { width: 44px; height: 44px; flex-basis: 44px; }
+  .brand-copy h1 { font-size: 1.7rem; }
+  .brand-copy .eyebrow { font-size: .58rem; }
+  .how-to-button { min-height: 44px; padding: 0 11px; font-size: .8rem; }
+  .settings-square { width: 44px; height: 44px; }
+  .mockup-tabs { height: 62px; margin-bottom: 28px; }
+  .mockup-tabs .tab { gap: 4px; font-size: .76rem; padding-inline: 2px; }
+  .tab-icon { font-size: .93rem; }
+  .today-date-nav { grid-template-columns: 48px minmax(158px, 1fr) 48px; gap: 10px; width: 100%; max-width: 328px; }
+  .date-arrow { width: 48px; min-height: 50px; border-radius: 15px; font-size: 1.45rem; }
+  .date-center { min-height: 50px; border-radius: 15px; padding: 0 13px; gap: 8px; font-size: 1rem; }
+  .today-date-text { font-size: .92rem; }
+  .today-meal-card { padding: 19px 18px 20px; }
+  .today-meal-icon { width: 39px; height: 39px; font-size: 1.2rem; }
+  .today-meal-kind { gap: 9px; }
+  .today-meal-label { font-size: .77rem; }
+  .status-pill { padding: 6px 10px; font-size: .69rem; }
+  .today-recipe-name { font-size: 1.72rem; }
+  .recipe-tap-hint { font-size: .83rem; }
+  .today-meal-divider { margin: 20px 0 14px; }
+  .today-meal-actions { gap: 6px; }
+  .meal-action { min-height: 50px; padding: 6px 4px; gap: 4px; font-size: .64rem; border-radius: 12px; }
+  .meal-action > span:first-child { font-size: .98rem; }
+}
+
+@media (max-width: 390px) {
+  .how-to-button { padding: 0 9px; }
+  .mockup-tabs .tab { font-size: .7rem; }
+  .today-meal-actions { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
