@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1620" />
+  <link rel="stylesheet" href="styles.css?v=1621" />
 </head>
 <body>
   <div id="appShell">
@@ -273,7 +273,7 @@
         <label>Cooking for
           <input id="slotPeople" type="number" min="1" max="30" step="1" value="2" inputmode="numeric" />
         </label>
-        <span class="muted small">Shopping quantities scale automatically.</span>
+        <span id="slotScalePreview" class="muted small">Shopping quantities scale automatically.</span>
       </div>
       <input id="slotSearch" type="search" placeholder="Find a recipe" />
       <div id="slotRecipeList" class="slot-recipe-list"></div>
@@ -402,6 +402,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1620"></script>
+  <script type="module" src="app.js?v=1621"></script>
 </body>
 </html>

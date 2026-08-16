@@ -64,6 +64,7 @@ let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
 let shoppingReviewSource = [];
+let slotPeopleSaveTimer = null;
 
 
 /* -------------------------------------------------------
@@ -1077,12 +1078,20 @@ function normalizeUnitForShopping(unit = '') {
     g: ['g','gram','grams','gramme','grammes'],
     kg: ['kg','kilogram','kilograms','kilogramme','kilogrammes'],
     ml: ['ml','milliliter','milliliters','millilitre','millilitres'],
+    cl: ['cl','centiliter','centiliters','centilitre','centilitres'],
     l: ['l','liter','liters','litre','litres'],
+    oz: ['oz','ounce','ounces'],
+    lb: ['lb','lbs','pound','pounds'],
     tsp: ['tsp','teaspoon','teaspoons','c à café','c a café','cuillère à café','cuilleres à café'],
     tbsp: ['tbsp','tablespoon','tablespoons','c à soupe','c a soupe','cuillère à soupe','cuilleres à soupe'],
     cup: ['cup','cups'],
-    clove: ['clove','cloves'],
-    piece: ['piece','pieces','pc','pcs']
+    clove: ['clove','cloves','gousse','gousses'],
+    cube: ['cube','cubes'],
+    can: ['can','cans','tin','tins','boîte','boîtes','boite','boites'],
+    slice: ['slice','slices','tranche','tranches'],
+    pack: ['pack','packs','package','packages','sachet','sachets'],
+    pinch: ['pinch','pinches','pincée','pincées','pincee','pincees'],
+    piece: ['piece','pieces','pc','pcs','morceau','morceaux']
   };
   for (const [canonical, aliases] of Object.entries(map)) {
     if (aliases.includes(u)) return canonical;
@@ -1093,7 +1102,10 @@ function normalizeUnitForShopping(unit = '') {
 function shoppingBaseUnit(unit = '') {
   const u = normalizeUnitForShopping(unit);
   if (u === 'kg') return { unit: 'g', factor: 1000 };
+  if (u === 'lb') return { unit: 'g', factor: 453.59237 };
+  if (u === 'oz') return { unit: 'g', factor: 28.349523125 };
   if (u === 'l') return { unit: 'ml', factor: 1000 };
+  if (u === 'cl') return { unit: 'ml', factor: 10 };
   return { unit: u, factor: 1 };
 }
 
@@ -1103,28 +1115,71 @@ function canonicalIngredientName(name = '') {
     .replace(/\s+/g, ' ')
     .replace(/,$/, '')
     .trim();
+
+  // Remove preparation/size wording that should not create duplicate shopping lines.
+  n = n
+    .replace(/^(?:small|medium|large|extra large|fresh|frozen)\s+/, '')
+    .replace(/^(?:grated|shredded|sliced|diced|chopped)\s+/, '')
+    .trim();
+
   const tests = [
-    [/^(ground beef|minced beef|beef mince|mince beef)(\b|$)/, 'Ground beef'],
+    [/^(ground beef|minced beef|beef mince|minced meat beef|mince beef)(\b|$)/, 'Ground beef'],
+    [/^(ground chicken|minced chicken|chicken mince)(\b|$)/, 'Ground chicken'],
     [/^(chicken breast|chicken breasts|chicken breast fillet|chicken breast fillets|chicken fillet|chicken fillets)(\b|$)/, 'Chicken breast'],
+    [/^(chicken thigh|chicken thighs|boneless chicken thigh|boneless chicken thighs)(\b|$)/, 'Chicken thigh'],
     [/^(bell pepper|bell peppers|capsicum|capsicums)(\b|$)/, 'Bell pepper'],
-    [/^(onion|onions)(\b|$)/, 'Onion'],
-    [/^(garlic|garlic clove|garlic cloves)(\b|$)/, 'Garlic'],
-    [/^(mushroom|mushrooms|button mushroom|button mushrooms)(\b|$)/, 'Mushrooms'],
-    [/^(spinach|spinach leaves)(\b|$)/, 'Spinach'],
-    [/^(parmesan|parmesan cheese|grated parmesan|grated parmesan cheese)(\b|$)/, 'Parmesan'],
-    [/^(emmental|emmental cheese|grated emmental|grated emmental cheese)(\b|$)/, 'Emmental'],
+    [/^(onion|onions|yellow onion|yellow onions|white onion|white onions)(\b|$)/, 'Onion'],
+    [/^(red onion|red onions)(\b|$)/, 'Red onion'],
+    [/^(garlic clove|garlic cloves|clove of garlic|cloves of garlic|minced garlic|garlic)(\b|$)/, 'Garlic'],
+    [/^(mushroom|mushrooms|button mushroom|button mushrooms|white mushroom|white mushrooms)(\b|$)/, 'Mushrooms'],
+    [/^(spinach|spinach leaves|baby spinach)(\b|$)/, 'Spinach'],
+    [/^(parmesan|parmesan cheese|parmigiano|parmigiano reggiano)(\b|$)/, 'Parmesan'],
+    [/^(cheddar|cheddar cheese)(\b|$)/, 'Cheddar'],
+    [/^(emmental|emmental cheese)(\b|$)/, 'Emmental'],
     [/^(greek yogurt|greek yoghurt)(\b|$)/, 'Greek yogurt'],
     [/^(creme fraiche|crème fraîche)(\b|$)/, 'Crème fraîche'],
     [/^(tomato paste|tomato puree|tomato purée)(\b|$)/, 'Tomato paste'],
-    [/^(soy sauce)(\b|$)/, 'Soy sauce'],
-    [/^(olive oil)(\b|$)/, 'Olive oil'],
-    [/^(rice vinegar)(\b|$)/, 'Rice vinegar'],
-    [/^(salmon fillet|salmon fillets)(\b|$)/, 'Salmon fillet']
+    [/^(soy sauce|soya sauce)(\b|$)/, 'Soy sauce'],
+    [/^(olive oil|extra virgin olive oil|evoo)(\b|$)/, 'Olive oil'],
+    [/^(neutral oil|vegetable oil|canola oil)(\b|$)/, 'Neutral oil'],
+    [/^(rice vinegar|rice wine vinegar)(\b|$)/, 'Rice vinegar'],
+    [/^(salmon fillet|salmon fillets|salmon filet|salmon filets)(\b|$)/, 'Salmon fillet'],
+    [/^(pasta|dry pasta)(\b|$)/, 'Pasta'],
+    [/^(rice|white rice)(\b|$)/, 'Rice'],
+    [/^(butter|unsalted butter|salted butter)(\b|$)/, 'Butter'],
+    [/^(cream|heavy cream|double cream)(\b|$)/, 'Cream'],
+    [/^(wrap|wraps|tortilla|tortillas|flour tortilla|flour tortillas)(\b|$)/, 'Wraps'],
+    [/^(salt and pepper|salt & pepper)(\b|$)/, 'Salt & pepper']
   ];
   for (const [rx, label] of tests) if (rx.test(n)) return label;
-  // Conservative cleanup only: remove preparation words after a comma, but do not merge different cuts/types.
+
+  // Conservative cleanup only: remove preparation wording after a comma.
   n = n.split(',')[0].trim();
   return n ? n.charAt(0).toUpperCase() + n.slice(1) : '';
+}
+
+function shoppingIngredientIdentity(name = '', unit = '') {
+  const canonicalName = canonicalIngredientName(name);
+  let normalizedUnit = normalizeUnitForShopping(unit);
+  const rawName = normalizeText(name);
+
+  // Countable ingredients written as "1 onion" and "2 pieces onions" should merge.
+  // We only infer a count unit for ingredients where one item has a clear physical meaning.
+  if (!normalizedUnit) {
+    const countable = new Set([
+      'Onion', 'Red onion', 'Bell pepper', 'Chicken breast', 'Chicken thigh',
+      'Salmon fillet', 'Mushrooms'
+    ]);
+    if (countable.has(canonicalName)) normalizedUnit = 'piece';
+    if (canonicalName === 'Garlic' && /\bcloves?\b/.test(rawName)) normalizedUnit = 'clove';
+  }
+
+  // "garlic clove" in the name and "clove" in the unit are equivalent.
+  if (canonicalName === 'Garlic' && /\bcloves?\b/.test(rawName) && !normalizedUnit) {
+    normalizedUnit = 'clove';
+  }
+
+  return { name: canonicalName, unit: normalizedUnit };
 }
 
 function fractionNumber(text) {
@@ -1143,17 +1198,27 @@ function fractionNumber(text) {
 }
 
 function scaledQuantity(raw, multiplier, unitFactor = 1) {
-  if (raw === '' || raw == null) return { number: null, text: '' };
-  if (typeof raw === 'number' && Number.isFinite(raw)) return { number: raw * multiplier * unitFactor, text: '' };
+  if (raw === '' || raw == null) return { number: null, min: null, max: null, text: '' };
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const value = raw * multiplier * unitFactor;
+    return { number: value, min: value, max: value, text: '' };
+  }
   const t = String(raw).trim();
   const range = t.match(/^(.+?)\s*[–—-]\s*(.+)$/);
   if (range) {
     const a = fractionNumber(range[1]), b = fractionNumber(range[2]);
-    if (a != null && b != null) return { number: null, text: `${formatNumber(a * multiplier * unitFactor)}–${formatNumber(b * multiplier * unitFactor)}` };
+    if (a != null && b != null) {
+      const min = Math.min(a, b) * multiplier * unitFactor;
+      const max = Math.max(a, b) * multiplier * unitFactor;
+      return { number: null, min, max, text: '' };
+    }
   }
   const n = fractionNumber(t);
-  if (n != null) return { number: n * multiplier * unitFactor, text: '' };
-  return { number: null, text: t };
+  if (n != null) {
+    const value = n * multiplier * unitFactor;
+    return { number: value, min: value, max: value, text: '' };
+  }
+  return { number: null, min: null, max: null, text: t };
 }
 
 function formatNumber(n) {
@@ -1185,32 +1250,53 @@ function mergedShoppingItems() {
     const multiplier = people / recipeServingCount(recipe);
 
     for (const ing of recipe.ingredients || []) {
-      const canonicalName = canonicalIngredientName(ing.name || '');
-      if (!canonicalName) continue;
-      const base = shoppingBaseUnit(ing.unit || '');
+      const identity = shoppingIngredientIdentity(ing.name || '', ing.unit || '');
+      if (!identity.name) continue;
+      const base = shoppingBaseUnit(identity.unit);
       const scaled = scaledQuantity(ing.quantity, multiplier, base.factor);
-      const key = `${normalizeText(canonicalName)}|${base.unit}`;
-      if (!map.has(key)) map.set(key, { name: canonicalName, unit: base.unit, quantity: 0, textQuantities: [], sources: 0 });
+      const key = `${normalizeText(identity.name)}|${base.unit}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          name: identity.name,
+          unit: base.unit,
+          minQuantity: 0,
+          maxQuantity: 0,
+          hasNumericQuantity: false,
+          textQuantities: [],
+          sources: 0
+        });
+      }
       const item = map.get(key);
       item.sources++;
-      if (scaled.number != null) item.quantity += scaled.number;
-      else if (scaled.text) item.textQuantities.push(scaled.text);
+      if (scaled.min != null && scaled.max != null) {
+        item.minQuantity += scaled.min;
+        item.maxQuantity += scaled.max;
+        item.hasNumericQuantity = true;
+      } else if (scaled.text) {
+        item.textQuantities.push(scaled.text);
+      }
     }
   }
-  return [...map.values()].map(item => {
-    if (!item.quantity) item.quantity = null;
-    return item;
-  }).sort((a,b) => a.name.localeCompare(b.name));
+  return [...map.values()].map(item => ({
+    ...item,
+    quantity: item.hasNumericQuantity && Math.abs(item.maxQuantity - item.minQuantity) < 1e-9
+      ? item.minQuantity
+      : null
+  })).sort((a,b) => a.name.localeCompare(b.name));
 }
 
 function formatQty(item) {
   const pieces = [];
-  if (item.quantity != null) {
-    let qty = item.quantity;
+  if (item.hasNumericQuantity) {
+    let min = item.minQuantity;
+    let max = item.maxQuantity;
     let unit = item.unit || '';
-    if (unit === 'g' && qty >= 1000) { qty /= 1000; unit = 'kg'; }
-    if (unit === 'ml' && qty >= 1000) { qty /= 1000; unit = 'L'; }
-    pieces.push(`${formatNumber(qty)}${unit ? ` ${unit}` : ''}`);
+    if (unit === 'g' && min >= 1000 && max >= 1000) { min /= 1000; max /= 1000; unit = 'kg'; }
+    if (unit === 'ml' && min >= 1000 && max >= 1000) { min /= 1000; max /= 1000; unit = 'L'; }
+    const quantityText = Math.abs(max - min) < 1e-9
+      ? formatNumber(min)
+      : `${formatNumber(min)}–${formatNumber(max)}`;
+    pieces.push(`${quantityText}${unit ? ` ${unit}` : ''}`);
   }
   if (item.textQuantities?.length) {
     const unique = [...new Set(item.textQuantities)];
@@ -1236,6 +1322,8 @@ function shoppingPayload() {
     items: mergedShoppingItems().map(i => ({
       name: i.name,
       quantity: i.quantity,
+      minQuantity: i.hasNumericQuantity ? i.minQuantity : null,
+      maxQuantity: i.hasNumericQuantity ? i.maxQuantity : null,
       unit: i.unit,
       displayQuantity: formatQty(i),
       mergedSources: i.sources
@@ -1848,9 +1936,54 @@ function openSlot(date, meal = 'dinner') {
   els.suggestionReason.textContent = '';
   const existingSlot = scheduleFor(date, meal);
   els.slotPeople.value = slotPeopleCount(existingSlot, existingSlot ? recipeById(existingSlot.recipeId) : null);
+  updateSlotPeoplePreview();
   els.removeMeal.hidden = !existingSlot;
   renderSlotRecipes();
   els.slotDialog.showModal();
+}
+
+function updateSlotPeoplePreview() {
+  const people = Math.max(1, Number(els.slotPeople.value) || Number(settings.defaultPeople) || 2);
+  const existingSlot = scheduleFor(currentSlotDate, currentSlotMeal);
+  const recipe = existingSlot ? recipeById(existingSlot.recipeId) : null;
+  if (!recipe) {
+    els.slotScalePreview.textContent = 'Choose a recipe and shopping quantities will scale automatically.';
+    return;
+  }
+  const serves = recipeServingCount(recipe);
+  const multiplier = people / serves;
+  els.slotScalePreview.textContent = `Recipe serves ${serves} · cooking for ${people} · shopping ×${formatNumber(multiplier)}`;
+}
+
+function updateCurrentSlotPeople() {
+  const people = Number(els.slotPeople.value);
+  if (!Number.isFinite(people) || people < 1 || !currentSlotDate) {
+    updateSlotPeoplePreview();
+    return;
+  }
+
+  updateSlotPeoplePreview();
+  const existingSlot = scheduleFor(currentSlotDate, currentSlotMeal);
+  if (!existingSlot) return; // The value will be used when a new recipe is chosen.
+
+  const cleanPeople = Math.max(1, Math.round(people));
+  existingSlot.people = cleanPeople;
+  // Re-render immediately so Today/Week/Shopping react without waiting for Firestore.
+  renderAll();
+
+  clearTimeout(slotPeopleSaveTimer);
+  slotPeopleSaveTimer = setTimeout(async () => {
+    const slotId = `${iso(currentSlotDate)}_${currentSlotMeal}`;
+    try {
+      await setDoc(doc(db, 'households', householdId, 'schedule', slotId), {
+        people: cleanPeople,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Could not update people count:', err);
+      toast(`Could not update people: ${err.message || err}`);
+    }
+  }, 250);
 }
 
 function exclusionReasonAgainst(recipe, date, scheduleState, meal = currentSlotMeal) {
@@ -2407,6 +2540,9 @@ function wireUi() {
     'change',
     renderRecipes
   );
+
+  els.slotPeople.addEventListener('input', updateCurrentSlotPeople);
+  els.slotPeople.addEventListener('change', updateCurrentSlotPeople);
 
   els.slotSearch.addEventListener(
     'input',
