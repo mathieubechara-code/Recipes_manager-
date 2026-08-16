@@ -1044,3 +1044,54 @@ main { padding-top: 8px; }
   .recipe-step-number { width: 34px; height: 34px; }
   .recipe-step-body p { font-size: .98rem; line-height: 1.52; }
 }
+
+
+/* V1.6 refinement — custom wide-open lock state */
+.meal-lock-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+.lock-svg {
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lock-svg-compact {
+  width: 19px;
+  height: 19px;
+}
+.lock-body {
+  fill: rgba(255,255,255,.18);
+}
+.lock-keyhole {
+  stroke-width: 1.65;
+}
+.lock-shackle-open {
+  transform-origin: 8.3px 10px;
+}
+.lock-open-gap {
+  stroke-width: 2.2;
+}
+.today-lock-meal:not(.is-active) {
+  color: #52685a;
+  background: #fffdf9;
+}
+.today-lock-meal.is-active {
+  color: #2f6d42;
+  background: #e9f1e6;
+  border-color: #9eb69a;
+}
+.meal-slot-control:not(.is-locked) .lock-svg {
+  color: #52685a;
+}
+.meal-slot-control.is-locked .lock-svg {
+  color: #2f6d42;
+}

@@ -683,6 +683,25 @@ function mealLabel(meal) {
 }
 
 
+function lockIconSvg(locked, compact = false) {
+  const sizeClass = compact ? 'lock-svg lock-svg-compact' : 'lock-svg';
+  if (locked) {
+    return `<svg class="${sizeClass}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path class="lock-shackle" d="M7 10V7.4C7 4.4 9.2 2.2 12 2.2s5 2.2 5 5.2V10" />
+      <rect class="lock-body" x="5" y="9" width="14" height="11.5" rx="2.5" />
+      <circle class="lock-keyhole" cx="12" cy="14.4" r="1.35" />
+      <path class="lock-keyhole" d="M12 15.6v2" />
+    </svg>`;
+  }
+  return `<svg class="${sizeClass}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path class="lock-shackle lock-shackle-open" d="M8.3 10V7.8C8.3 4.8 10.5 2.5 13.3 2.5c2.2 0 4 1.3 4.7 3.2" />
+    <path class="lock-open-gap" d="M18.1 5.7l2.2-2.1" />
+    <rect class="lock-body" x="5" y="9" width="14" height="11.5" rx="2.5" />
+    <circle class="lock-keyhole" cx="12" cy="14.4" r="1.35" />
+    <path class="lock-keyhole" d="M12 15.6v2" />
+  </svg>`;
+}
+
 function slotIsLocked(slot) {
   return slot?.locked === true;
 }
@@ -797,7 +816,7 @@ function renderTodayMeal(date, meal) {
          <div class="today-meal-meta">${slotIsLocked(slot) ? '🔒 Locked' : ''}</div>
          <div class="today-meal-divider" aria-hidden="true"></div>
          <div class="today-meal-actions" role="group" aria-label="${mealLabel(meal)} actions">
-           <button type="button" class="meal-action today-lock-meal ${slotIsLocked(slot) ? 'is-active' : ''}" title="${slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal'}"><span aria-hidden="true">🔒</span><span>${slotIsLocked(slot) ? 'Unlock' : 'Lock'}</span></button>
+           <button type="button" class="meal-action today-lock-meal ${slotIsLocked(slot) ? 'is-active' : ''}" title="${slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal'}"><span class="meal-lock-icon">${lockIconSvg(slotIsLocked(slot))}</span><span>${slotIsLocked(slot) ? 'Locked' : 'Lock'}</span></button>
            <button type="button" class="meal-action today-regenerate-meal" ${slotIsLocked(slot) ? 'disabled' : ''} title="Regenerate this meal"><span aria-hidden="true">↻</span><span>Regenerate</span></button>
            <button type="button" class="meal-action today-change-meal" title="Choose a different recipe"><span aria-hidden="true">⇄</span><span>Change</span></button>
            <button type="button" class="meal-action danger-action today-remove-meal" title="Remove this meal"><span aria-hidden="true">⌫</span><span>Remove</span></button>
@@ -868,7 +887,7 @@ function renderMealSlot(date, meal) {
     const lock = document.createElement('button');
     lock.type = 'button';
     lock.className = `meal-slot-control${slotIsLocked(slot) ? ' is-locked' : ''}`;
-    lock.textContent = '🔒';
+    lock.innerHTML = lockIconSvg(slotIsLocked(slot), true);
     lock.title = slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal';
     lock.setAttribute('aria-label', lock.title);
     lock.addEventListener('click', () => setMealLocked(date, meal, !slotIsLocked(slot)));
