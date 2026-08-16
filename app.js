@@ -59,6 +59,7 @@ let viewedRecipeId = null;
 let unsubscribers = [];
 let recipeReaderCurrentStep = 0;
 let recipeReaderScrollTicking = false;
+let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
 
@@ -1369,7 +1370,19 @@ function setRecipeCurrentStep(index, { scroll = false } = {}) {
   els.recipeStepProgressText.textContent = `Step ${recipeReaderCurrentStep + 1} of ${items.length}`;
 
   if (scroll) {
-    items[recipeReaderCurrentStep].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const target = items[recipeReaderCurrentStep];
+    const reader = els.recipeReaderScroll;
+    const readerRect = reader.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+
+    // Position the selected step just below the sticky recipe tabs/progress bar.
+    // Scrolling the dialog container directly is more reliable on iPhone Safari
+    // than Element.scrollIntoView() inside a <dialog>.
+    const readingOffset = 112;
+    const destination = Math.max(0, reader.scrollTop + (targetRect.top - readerRect.top) - readingOffset);
+
+    recipeReaderManualScrollUntil = performance.now() + 700;
+    reader.scrollTo({ top: destination, behavior: 'smooth' });
   }
 }
 
@@ -1398,6 +1411,7 @@ function updateRecipeCurrentStep(force = false) {
 }
 
 function onRecipeReaderScroll() {
+  if (performance.now() < recipeReaderManualScrollUntil) return;
   if (recipeReaderScrollTicking) return;
   recipeReaderScrollTicking = true;
   requestAnimationFrame(() => {
