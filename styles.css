@@ -284,3 +284,10 @@ dialog::backdrop { background: rgba(58,50,41,.35); backdrop-filter: blur(3px); }
   .meal-slot-main .status-pill { grid-column: 2; justify-self: start; }
   .meal-slot-change { padding: 7px 8px; }
 }
+
+/* v1.3 meal suitability */
+.meal-type-tag {
+  font-weight: 700;
+  border-style: solid;
+}
+.recipe-classification-row { align-items: end; }

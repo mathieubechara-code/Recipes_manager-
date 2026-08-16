@@ -157,7 +157,16 @@
         <label>Prep time (min)<input id="prepTime" type="number" min="0" step="1" /></label>
         <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
       </div>
-      <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
+      <div class="two-col recipe-classification-row">
+        <label>Suitable for
+          <select id="recipeMealType">
+            <option value="both">Lunch &amp; Dinner</option>
+            <option value="lunch">Lunch only</option>
+            <option value="dinner">Dinner only</option>
+          </select>
+        </label>
+        <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
+      </div>
       <div>
         <div class="inline-heading"><strong>Ingredients</strong><button id="addIngredient" type="button" class="text-button">+ ingredient</button></div>
         <div id="ingredientRows" class="ingredient-rows"></div>
@@ -218,12 +227,14 @@
         </div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Choose the days and meal slots Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
-      <div class="meal-choice-row">
-        <strong>Meals</strong>
-        <label class="checkbox-row compact-check"><input id="planLunch" type="checkbox" checked /> Lunch</label>
-        <label class="checkbox-row compact-check"><input id="planDinner" type="checkbox" checked /> Dinner</label>
-      </div>
+      <p class="muted small">Choose Lunch week, Dinner week, or a full Lunch &amp; Dinner week, then choose the days Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
+      <label>Plan
+        <select id="weekPlanScope">
+          <option value="full">Full week — Lunch &amp; Dinner</option>
+          <option value="lunch">Lunch week only</option>
+          <option value="dinner">Dinner week only</option>
+        </select>
+      </label>
       <div class="button-row preset-row">
         <button id="selectAllWeekDays" type="button" class="secondary">Select all</button>
         <button id="selectEmptyWeekDays" type="button" class="secondary">Select empty days</button>

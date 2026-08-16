@@ -232,9 +232,23 @@ function cleanRecipeLine(line = '') {
 
 function headingKind(line = '') {
   const t = normalizeText(line.replace(/[:：]$/, ''));
-  if (/^(ingredients?|ingr[eé]dients?)$/.test(t)) return 'ingredients';
-  if (/^(instructions?|preparation|préparation|method|méthode|directions?)$/.test(t)) return 'instructions';
-  if (/^(preparation|préparation)\s+(du|de la|des|of|for)\b/.test(t)) return 'instruction-subheading';
+
+  // Accept headings that include serving/context notes, for example:
+  // “Ingredients (for 2 salmon fillets)”, “Ingredients for 4”,
+  // “Ingrédients (pour 2 personnes)”.
+  if (/^(ingredients?|ingr[eé]dients?)(?:\s*\([^)]*\))?(?:\s+(?:for|pour)\b.*)?$/.test(t)) {
+    return 'ingredients';
+  }
+
+  // Accept the same kind of optional note on instruction headings.
+  if (/^(instructions?|preparation|préparation|method|méthode|directions?)(?:\s*\([^)]*\))?$/.test(t)) {
+    return 'instructions';
+  }
+
+  if (/^(preparation|préparation)\s+(du|de la|des|of|for)\b/.test(t)) {
+    return 'instruction-subheading';
+  }
+
   return '';
 }
 
@@ -640,6 +654,22 @@ function recipeById(id) {
   return recipes.find(r => r.id === id);
 }
 
+function recipeMealType(recipe) {
+  return ['lunch', 'dinner', 'both'].includes(recipe?.mealType) ? recipe.mealType : 'both';
+}
+
+function recipeMealTypeLabel(recipe) {
+  const type = recipeMealType(recipe);
+  if (type === 'lunch') return 'Lunch';
+  if (type === 'dinner') return 'Dinner';
+  return 'Lunch & Dinner';
+}
+
+function recipeSupportsMeal(recipe, meal) {
+  const type = recipeMealType(recipe);
+  return type === 'both' || type === meal;
+}
+
 function mealLabel(meal) {
   return meal === 'lunch' ? 'Lunch' : 'Dinner';
 }
@@ -743,7 +773,7 @@ function renderRecipes() {
     const photo = safePhoto(r.photoUrl || '');
     card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
       <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
-      <div class="tags">${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+      <div class="tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
       <p class="muted small">${(r.ingredients||[]).length} ingredients${r.prepTimeMin ? ` · ${r.prepTimeMin} min` : ''}</p>
       <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
     card.addEventListener('click', () => openRecipeView(r));
@@ -1055,7 +1085,7 @@ function openRecipeView(recipe) {
     els.recipeViewPhoto.hidden = true;
   }
   els.recipeViewMeta.textContent = recipe.prepTimeMin ? `${recipe.prepTimeMin} min prep` : '';
-  els.recipeViewTags.innerHTML = (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+  els.recipeViewTags.innerHTML = `<span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(recipe))}</span>` + (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
   const groups = new Map();
   for (const ing of recipe.ingredients || []) {
@@ -1105,6 +1135,8 @@ function openRecipe(
 
   els.recipeTags.value =
     (recipe?.tags || []).join(', ');
+
+  els.recipeMealType.value = recipeMealType(recipe);
 
   els.instructions.value =
     recipe?.instructions || '';
@@ -1183,6 +1215,10 @@ async function saveRecipe(ev) {
         .split(',')
         .map(normalizeText)
         .filter(Boolean),
+
+    mealType: ['lunch', 'dinner', 'both'].includes(els.recipeMealType.value)
+      ? els.recipeMealType.value
+      : 'both',
 
     prepTimeMin:
       Number(els.prepTime.value) || 0,
@@ -1317,10 +1353,15 @@ function renderSlotRecipes() {
   els.slotRecipeList.innerHTML = items.length ? '' : '<div class="empty-state">No recipes found.</div>';
   items.forEach(r => {
     const reason = exclusionReason(r, currentSlotDate);
+    const mealMismatch = !recipeSupportsMeal(r, currentSlotMeal);
+    const note = mealMismatch
+      ? `${recipeMealTypeLabel(r)} recipe · manual override`
+      : reason || `${r.prepTimeMin||0} min · eligible`;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `slot-option${reason ? ' disabled' : ''}`;
-    btn.innerHTML = `<span><div class="slot-option-title">${escapeHtml(r.name)}</div><div class="slot-option-meta">${reason ? escapeHtml(reason) : `${r.prepTimeMin||0} min · eligible`}</div></span><span>Choose</span>`;
+    btn.className = `slot-option${(reason || mealMismatch) ? ' disabled' : ''}`;
+    btn.innerHTML = `<span><div class="slot-option-title">${escapeHtml(r.name)}</div><div class="slot-option-meta">${escapeHtml(note)}</div></span><span>Choose</span>`;
+    // Manual selection is always allowed, even if meal suitability or anti-repeat rules would exclude it from suggestions.
     btn.addEventListener('click', () => assignMeal(r.id, 'confirmed'));
     els.slotRecipeList.appendChild(btn);
   });
@@ -1342,7 +1383,7 @@ async function assignMeal(recipeId, status) {
 
 async function suggestMeal() {
   if (!recipes.length) return toast('Add a recipe first');
-  const eligible = recipes.filter(r => !exclusionReason(r,currentSlotDate));
+  const eligible = recipes.filter(r => recipeSupportsMeal(r, currentSlotMeal) && !exclusionReason(r,currentSlotDate));
   if (!eligible.length) {
     els.suggestionReason.textContent = 'No recipes are eligible under the current anti-repeat settings. Choose one manually to override, or reduce the repeat window in Settings.';
     return toast('No eligible recipes — manual override is still available');
@@ -1363,10 +1404,10 @@ async function removeMeal() {
 ------------------------------------------------------- */
 
 function selectedPlannerMeals() {
-  const meals = [];
-  if (els.planLunch.checked) meals.push('lunch');
-  if (els.planDinner.checked) meals.push('dinner');
-  return meals;
+  const scope = els.weekPlanScope.value || 'full';
+  if (scope === 'lunch') return ['lunch'];
+  if (scope === 'dinner') return ['dinner'];
+  return ['lunch', 'dinner'];
 }
 
 function dayHasEmptySelectedMeal(date) {
@@ -1396,8 +1437,7 @@ function renderWeekPlanDays() {
 }
 
 function openWeekPlanner() {
-  els.planLunch.checked = true;
-  els.planDinner.checked = true;
+  els.weekPlanScope.value = 'full';
   renderWeekPlanDays();
   els.replaceExistingWeekMeals.checked = false;
   els.weekPlanReason.textContent = '';
@@ -1418,7 +1458,7 @@ async function suggestWeekDays() {
     .map(cb => parseIsoLocal(cb.dataset.date)).sort((a,b)=>a-b);
   if (!selected.length) return toast('Select at least one day');
   const meals = selectedPlannerMeals();
-  if (!meals.length) return toast('Select Lunch, Dinner, or both');
+  if (!meals.length) return toast('Choose Lunch week, Dinner week, or Full week');
 
   const replaceExisting = els.replaceExistingWeekMeals.checked;
   const workingSchedule = schedule.map(s => ({...s}));
@@ -1430,7 +1470,7 @@ async function suggestWeekDays() {
       const current = workingSchedule.find(s => s.date === dateIso && s.meal === meal);
       if (current && !replaceExisting) { skipped++; continue; }
       const scheduleForEligibility = workingSchedule.filter(s => !(s.date === dateIso && s.meal === meal));
-      const eligible = recipes.filter(r => !exclusionReasonAgainst(r, date, scheduleForEligibility, meal));
+      const eligible = recipes.filter(r => recipeSupportsMeal(r, meal) && !exclusionReasonAgainst(r, date, scheduleForEligibility, meal));
       if (!eligible.length) { skipped++; continue; }
       const picked = eligible[Math.floor(Math.random() * eligible.length)];
       const slotId = `${dateIso}_${meal}`;
@@ -1496,6 +1536,7 @@ async function readRestoreFile(ev) {
 
 function firestoreSafeRecipe(recipe) {
   const clean = { ...recipe };
+  clean.mealType = ['lunch', 'dinner', 'both'].includes(clean.mealType) ? clean.mealType : 'both';
   delete clean.id;
   // Firestore export timestamps become plain objects in JSON; replacing them avoids type errors.
   clean.restoredAt = serverTimestamp();
@@ -1778,8 +1819,7 @@ function wireUi() {
   els.planWeekButton.addEventListener('click', openWeekPlanner);
   els.clearVisibleWeekButton.addEventListener('click', clearVisibleWeek);
   els.editViewedRecipe.addEventListener('click', editViewedRecipe);
-  els.planLunch.addEventListener('change', renderWeekPlanDays);
-  els.planDinner.addEventListener('change', renderWeekPlanDays);
+  els.weekPlanScope.addEventListener('change', renderWeekPlanDays);
   els.selectAllWeekDays.addEventListener('click', () => setWeekPlannerSelection('all'));
   els.selectEmptyWeekDays.addEventListener('click', () => setWeekPlannerSelection('empty'));
   els.clearWeekDays.addEventListener('click', () => setWeekPlannerSelection('clear'));
