@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1616" />
+  <link rel="stylesheet" href="styles.css?v=1620" />
 </head>
 <body>
   <div id="appShell">
@@ -142,10 +142,11 @@
             </div>
           </div>
           <div class="card shopping-actions">
-            <p class="muted">Ingredients are merged by normalized name + unit across all confirmed and suggested meals in the visible week.</p>
+            <p class="muted">Quantities are scaled for the number of people, then compatible units and common ingredient aliases are merged for the visible week.</p>
             <div class="button-row">
               <button id="copyShopping" class="secondary">Copy list</button>
-              <button id="runShortcut" class="primary">Send to Reminders</button>
+              <button id="reviewShopping" class="secondary">Review list</button>
+              <button id="runShortcut" class="primary">Review &amp; send</button>
             </div>
           </div>
           <div id="shoppingList" class="shopping-list"></div>
@@ -214,8 +215,9 @@
       <label>Name<input id="recipeName" required /></label>
       <div class="two-col">
         <label>Prep time (min)<input id="prepTime" type="number" min="0" step="1" /></label>
-        <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
+        <label>Recipe serves<input id="recipeServings" type="number" min="1" max="30" step="1" value="2" /></label>
       </div>
+      <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
       <div class="two-col recipe-classification-row">
         <label>Suitable for
           <select id="recipeMealType">
@@ -266,6 +268,12 @@
       <div class="dialog-title-row">
         <div><p id="slotMealLabel" class="eyebrow">Dinner</p><h2 id="slotTitle">Choose meal</h2></div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <div class="slot-people-row">
+        <label>Cooking for
+          <input id="slotPeople" type="number" min="1" max="30" step="1" value="2" inputmode="numeric" />
+        </label>
+        <span class="muted small">Shopping quantities scale automatically.</span>
       </div>
       <input id="slotSearch" type="search" placeholder="Find a recipe" />
       <div id="slotRecipeList" class="slot-recipe-list"></div>
@@ -357,6 +365,23 @@
     </div>
   </dialog>
 
+  <dialog id="shoppingReviewDialog">
+    <div class="dialog-form shopping-review-dialog">
+      <div class="dialog-title-row">
+        <div><p class="eyebrow">Before Reminders</p><h2>Review shopping list</h2></div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="muted small">Edit wording or remove anything you already have. These edits apply to this send only.</p>
+      <div id="shoppingReviewList" class="shopping-review-list"></div>
+      <div class="dialog-actions wrap">
+        <button id="copyReviewedShopping" type="button" class="secondary">Copy reviewed</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button id="sendReviewedShopping" type="button" class="primary">Send to Reminders</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="settingsDialog">
     <form id="settingsForm" method="dialog" class="dialog-form">
       <div class="dialog-title-row">
@@ -365,6 +390,7 @@
       </div>
       <label>Anti-repeat window (weeks)<input id="repeatWeeks" type="number" min="0" max="52" step="1" value="4" /></label>
       <label class="checkbox-row"><input id="avoidSameWeek" type="checkbox" checked /> Avoid any recipe already scheduled in the same week</label>
+      <label>Default people per scheduled meal<input id="defaultPeople" type="number" min="1" max="30" step="1" value="2" /></label>
       <label>Apple Shortcut name<input id="shortcutName" value="Kitchen Week to Reminders" /></label>
       <p class="muted small">Each phone should create a Shortcut with this exact name. The app copies a newline list to the clipboard, then launches the Shortcut with clipboard input.</p>
       <div class="dialog-actions">
@@ -376,6 +402,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1616"></script>
+  <script type="module" src="app.js?v=1620"></script>
 </body>
 </html>

@@ -47,7 +47,8 @@ let schedule = [];
 let settings = {
   repeatWeeks: 4,
   avoidSameWeek: true,
-  shortcutName: 'Kitchen Week to Reminders'
+  shortcutName: 'Kitchen Week to Reminders',
+  defaultPeople: 2
 };
 
 let weekStart = startOfWeek(new Date());
@@ -62,6 +63,7 @@ let recipeReaderScrollTicking = false;
 let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
+let shoppingReviewSource = [];
 
 
 /* -------------------------------------------------------
@@ -327,6 +329,22 @@ function inferRecipeTags(title = '', text = '') {
   return [...tags];
 }
 
+
+function inferRecipeServings(text = '') {
+  const clean = decodeNotesText(text);
+  const patterns = [
+    /serves?\s*(\d{1,2})/i,
+    /for\s*(\d{1,2})\s*(?:people|persons?|servings?)/i,
+    /(?:pour|pour\s+le)\s*(\d{1,2})\s*(?:personnes?|pers\.?)/i,
+    /\((\d{1,2})\s*(?:personnes?|people|servings?)\)/i
+  ];
+  for (const re of patterns) {
+    const m = clean.match(re);
+    if (m) return Math.max(1, Number(m[1]) || 2);
+  }
+  return 2;
+}
+
 function parseRecipeText(rawText) {
   const text = decodeNotesText(rawText);
   const rawLines = text.split('\n');
@@ -401,6 +419,7 @@ function parseRecipeText(rawText) {
     name: title || 'Imported recipe',
     tags: inferRecipeTags(title, text),
     prepTimeMin: 0,
+    servings: inferRecipeServings(text),
     photoUrl: '',
     ingredients,
     instructions: instructionLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
@@ -741,6 +760,7 @@ async function regenerateMeal(date, meal) {
       recipeId: picked.id,
       status: 'suggested',
       locked: false,
+      people: slotPeopleCount(slot, picked),
       updatedAt: serverTimestamp()
     },
     { merge: true }
@@ -774,6 +794,7 @@ async function regenerateUnlockedWeek() {
         recipeId: picked.id,
         status: 'suggested',
         locked: false,
+        people: slotPeopleCount(slot, picked),
         updatedAt: serverTimestamp()
       },
       { merge: true }
@@ -813,7 +834,7 @@ function renderTodayMeal(date, meal) {
            <span class="today-recipe-name">${escapeHtml(recipe.name)}</span>
            <span class="recipe-tap-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
          </button>
-         <div class="today-meal-meta">${slotIsLocked(slot) ? '🔒 Locked' : ''}</div>
+         <div class="today-meal-meta">For ${slotPeopleCount(slot, recipe)} ${slotPeopleCount(slot, recipe) === 1 ? 'person' : 'people'}${slotIsLocked(slot) ? ' · 🔒 Locked' : ''}</div>
          <div class="today-meal-divider" aria-hidden="true"></div>
          <div class="today-meal-actions" role="group" aria-label="${mealLabel(meal)} actions">
            <button type="button" class="meal-action today-lock-meal ${slotIsLocked(slot) ? 'is-active' : ''}" title="${slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal'}"><span class="meal-lock-icon">${lockIconSvg(slotIsLocked(slot))}</span><span>${slotIsLocked(slot) ? 'Locked' : 'Lock'}</span></button>
@@ -869,7 +890,7 @@ function renderMealSlot(date, meal) {
     ${recipe
       ? `<span class="meal-name">${escapeHtml(recipe.name)}</span>
          <span class="meal-view-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
-         <span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}${slotIsLocked(slot) ? `${recipe.prepTimeMin ? ' · ' : ''}🔒 Locked` : ''}</span>`
+         <span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min · ` : ''}${slotPeopleCount(slot, recipe)} ${slotPeopleCount(slot, recipe) === 1 ? 'person' : 'people'}${slotIsLocked(slot) ? ' · 🔒 Locked' : ''}</span>`
       : '<span class="empty-meal">Choose meal</span>'}
   `;
   main.addEventListener('click', () => {
@@ -988,7 +1009,7 @@ function renderRecipes() {
     card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
       <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
       <div class="tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
-      <p class="muted small">${(r.ingredients||[]).length} ingredients${r.prepTimeMin ? ` · ${r.prepTimeMin} min` : ''}</p>
+      <p class="muted small">${(r.ingredients||[]).length} ingredients · Serves ${recipeServingCount(r)}${r.prepTimeMin ? ` · ${r.prepTimeMin} min` : ''}</p>
       <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
     card.addEventListener('click', () => openRecipeView(r));
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecipeView(r); } });
@@ -1050,176 +1071,221 @@ function getWeekSlots(
 }
 
 
+function normalizeUnitForShopping(unit = '') {
+  const u = normalizeText(unit).replace(/\./g, '');
+  const map = {
+    g: ['g','gram','grams','gramme','grammes'],
+    kg: ['kg','kilogram','kilograms','kilogramme','kilogrammes'],
+    ml: ['ml','milliliter','milliliters','millilitre','millilitres'],
+    l: ['l','liter','liters','litre','litres'],
+    tsp: ['tsp','teaspoon','teaspoons','c à café','c a café','cuillère à café','cuilleres à café'],
+    tbsp: ['tbsp','tablespoon','tablespoons','c à soupe','c a soupe','cuillère à soupe','cuilleres à soupe'],
+    cup: ['cup','cups'],
+    clove: ['clove','cloves'],
+    piece: ['piece','pieces','pc','pcs']
+  };
+  for (const [canonical, aliases] of Object.entries(map)) {
+    if (aliases.includes(u)) return canonical;
+  }
+  return u;
+}
+
+function shoppingBaseUnit(unit = '') {
+  const u = normalizeUnitForShopping(unit);
+  if (u === 'kg') return { unit: 'g', factor: 1000 };
+  if (u === 'l') return { unit: 'ml', factor: 1000 };
+  return { unit: u, factor: 1 };
+}
+
+function canonicalIngredientName(name = '') {
+  let n = normalizeText(name)
+    .replace(/[()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/,$/, '')
+    .trim();
+  const tests = [
+    [/^(ground beef|minced beef|beef mince|mince beef)(\b|$)/, 'Ground beef'],
+    [/^(chicken breast|chicken breasts|chicken breast fillet|chicken breast fillets|chicken fillet|chicken fillets)(\b|$)/, 'Chicken breast'],
+    [/^(bell pepper|bell peppers|capsicum|capsicums)(\b|$)/, 'Bell pepper'],
+    [/^(onion|onions)(\b|$)/, 'Onion'],
+    [/^(garlic|garlic clove|garlic cloves)(\b|$)/, 'Garlic'],
+    [/^(mushroom|mushrooms|button mushroom|button mushrooms)(\b|$)/, 'Mushrooms'],
+    [/^(spinach|spinach leaves)(\b|$)/, 'Spinach'],
+    [/^(parmesan|parmesan cheese|grated parmesan|grated parmesan cheese)(\b|$)/, 'Parmesan'],
+    [/^(emmental|emmental cheese|grated emmental|grated emmental cheese)(\b|$)/, 'Emmental'],
+    [/^(greek yogurt|greek yoghurt)(\b|$)/, 'Greek yogurt'],
+    [/^(creme fraiche|crème fraîche)(\b|$)/, 'Crème fraîche'],
+    [/^(tomato paste|tomato puree|tomato purée)(\b|$)/, 'Tomato paste'],
+    [/^(soy sauce)(\b|$)/, 'Soy sauce'],
+    [/^(olive oil)(\b|$)/, 'Olive oil'],
+    [/^(rice vinegar)(\b|$)/, 'Rice vinegar'],
+    [/^(salmon fillet|salmon fillets)(\b|$)/, 'Salmon fillet']
+  ];
+  for (const [rx, label] of tests) if (rx.test(n)) return label;
+  // Conservative cleanup only: remove preparation words after a comma, but do not merge different cuts/types.
+  n = n.split(',')[0].trim();
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : '';
+}
+
+function fractionNumber(text) {
+  if (typeof text === 'number' && Number.isFinite(text)) return text;
+  let t = String(text ?? '').trim().replace(',', '.');
+  const unicode = { '¼': .25, '½': .5, '¾': .75, '⅓': 1/3, '⅔': 2/3, '⅛': .125, '⅜': .375, '⅝': .625, '⅞': .875 };
+  if (unicode[t] != null) return unicode[t];
+  const mixedUnicode = t.match(/^(\d+)\s*([¼½¾⅓⅔⅛⅜⅝⅞])$/);
+  if (mixedUnicode) return Number(mixedUnicode[1]) + unicode[mixedUnicode[2]];
+  const frac = t.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (frac && Number(frac[2])) return Number(frac[1]) / Number(frac[2]);
+  const mixed = t.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixed && Number(mixed[3])) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function scaledQuantity(raw, multiplier, unitFactor = 1) {
+  if (raw === '' || raw == null) return { number: null, text: '' };
+  if (typeof raw === 'number' && Number.isFinite(raw)) return { number: raw * multiplier * unitFactor, text: '' };
+  const t = String(raw).trim();
+  const range = t.match(/^(.+?)\s*[–—-]\s*(.+)$/);
+  if (range) {
+    const a = fractionNumber(range[1]), b = fractionNumber(range[2]);
+    if (a != null && b != null) return { number: null, text: `${formatNumber(a * multiplier * unitFactor)}–${formatNumber(b * multiplier * unitFactor)}` };
+  }
+  const n = fractionNumber(t);
+  if (n != null) return { number: n * multiplier * unitFactor, text: '' };
+  return { number: null, text: t };
+}
+
+function formatNumber(n) {
+  if (!Number.isFinite(n)) return '';
+  const rounded = Math.round(n * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+function slotPeopleCount(slot, recipe) {
+  const v = Number(slot?.people);
+  if (Number.isFinite(v) && v > 0) return v;
+  const d = Number(settings.defaultPeople);
+  if (Number.isFinite(d) && d > 0) return d;
+  const r = Number(recipe?.servings);
+  return Number.isFinite(r) && r > 0 ? r : 2;
+}
+
+function recipeServingCount(recipe) {
+  const n = Number(recipe?.servings);
+  return Number.isFinite(n) && n > 0 ? n : 2;
+}
+
 function mergedShoppingItems() {
   const map = new Map();
-
   for (const slot of getWeekSlots(true)) {
-    const recipe =
-      recipeById(slot.recipeId);
+    const recipe = recipeById(slot.recipeId);
+    if (!recipe) continue;
+    const people = slotPeopleCount(slot, recipe);
+    const multiplier = people / recipeServingCount(recipe);
 
-    if (!recipe) {
-      continue;
-    }
-
-    for (
-      const ing of recipe.ingredients || []
-    ) {
-      const name =
-        normalizeText(ing.name);
-
-      if (!name) {
-        continue;
-      }
-
-      const unit =
-        normalizeText(
-          ing.unit || ''
-        );
-
-      const key =
-        `${name}|${unit}`;
-
-      const qtyNum =
-        Number(ing.quantity);
-
-      if (!map.has(key)) {
-        map.set(key, {
-          name: ing.name.trim(),
-          unit:
-            ing.unit?.trim() || '',
-          quantity:
-            Number.isFinite(qtyNum)
-              ? 0
-              : null,
-          quantities: []
-        });
-      }
-
-      const item =
-        map.get(key);
-
-      if (
-        item.quantity !== null &&
-        Number.isFinite(qtyNum)
-      ) {
-        item.quantity += qtyNum;
-      } else if (
-        ing.quantity !== '' &&
-        ing.quantity != null
-      ) {
-        item.quantity = null;
-
-        item.quantities.push(
-          String(ing.quantity)
-        );
-      }
+    for (const ing of recipe.ingredients || []) {
+      const canonicalName = canonicalIngredientName(ing.name || '');
+      if (!canonicalName) continue;
+      const base = shoppingBaseUnit(ing.unit || '');
+      const scaled = scaledQuantity(ing.quantity, multiplier, base.factor);
+      const key = `${normalizeText(canonicalName)}|${base.unit}`;
+      if (!map.has(key)) map.set(key, { name: canonicalName, unit: base.unit, quantity: 0, textQuantities: [], sources: 0 });
+      const item = map.get(key);
+      item.sources++;
+      if (scaled.number != null) item.quantity += scaled.number;
+      else if (scaled.text) item.textQuantities.push(scaled.text);
     }
   }
-
-  return [...map.values()]
-    .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name)
-    );
+  return [...map.values()].map(item => {
+    if (!item.quantity) item.quantity = null;
+    return item;
+  }).sort((a,b) => a.name.localeCompare(b.name));
 }
-
 
 function formatQty(item) {
-  if (item.quantity !== null) {
-    const n =
-      Number.isInteger(item.quantity)
-        ? item.quantity
-        : Math.round(
-            item.quantity * 100
-          ) / 100;
-
-    return `${n}${
-      item.unit
-        ? ` ${item.unit}`
-        : ''
-    }`;
+  const pieces = [];
+  if (item.quantity != null) {
+    let qty = item.quantity;
+    let unit = item.unit || '';
+    if (unit === 'g' && qty >= 1000) { qty /= 1000; unit = 'kg'; }
+    if (unit === 'ml' && qty >= 1000) { qty /= 1000; unit = 'L'; }
+    pieces.push(`${formatNumber(qty)}${unit ? ` ${unit}` : ''}`);
   }
-
-  return `${
-    item.quantities.join(' + ')
-  }${
-    item.unit
-      ? ` ${item.unit}`
-      : ''
-  }`.trim();
+  if (item.textQuantities?.length) {
+    const unique = [...new Set(item.textQuantities)];
+    pieces.push(`${unique.join(' + ')}${item.unit ? ` ${item.unit}` : ''}`.trim());
+  }
+  return pieces.join(' + ');
 }
 
+function shoppingLine(item) {
+  const qty = formatQty(item);
+  return `${item.name}${qty ? ` — ${qty}` : ''}`;
+}
 
 function shoppingText() {
-  return mergedShoppingItems()
-    .map(
-      i =>
-        `${i.name}${
-          formatQty(i)
-            ? ` — ${formatQty(i)}`
-            : ''
-        }`
-    )
-    .join('\n');
+  return mergedShoppingItems().map(shoppingLine).join('\n');
 }
-
 
 function shoppingPayload() {
   return {
-    schema:
-      'kitchen-week.shopping.v1',
-
-    weekStart:
-      iso(weekStart),
-
-    generatedAt:
-      new Date().toISOString(),
-
-    items:
-      mergedShoppingItems().map(i => ({
-        name: i.name,
-        quantity: i.quantity,
-        unit: i.unit,
-        displayQuantity:
-          formatQty(i)
-      }))
+    schema: 'meal-planner.shopping.v2',
+    weekStart: iso(weekStart),
+    generatedAt: new Date().toISOString(),
+    items: mergedShoppingItems().map(i => ({
+      name: i.name,
+      quantity: i.quantity,
+      unit: i.unit,
+      displayQuantity: formatQty(i),
+      mergedSources: i.sources
+    }))
   };
 }
 
-
 function renderShopping() {
-  const items =
-    mergedShoppingItems();
+  const items = mergedShoppingItems();
+  els.shoppingList.innerHTML = items.length
+    ? items.map(i => `<div class="shopping-item"><span><strong>${escapeHtml(i.name)}</strong>${i.sources > 1 ? `<small class="shopping-merged-note">merged from ${i.sources} recipe entries</small>` : ''}</span><span class="shopping-qty">${escapeHtml(formatQty(i))}</span></div>`).join('')
+    : '<div class="empty-state">Schedule meals this week to build a shopping list.</div>';
+  els.shoppingJson.textContent = JSON.stringify(shoppingPayload(), null, 2);
+}
 
-  els.shoppingList.innerHTML =
-    items.length
-      ? items
-          .map(
-            i => `
-              <div class="shopping-item">
-                <span>
-                  ${escapeHtml(i.name)}
-                </span>
+function openShoppingReview() {
+  shoppingReviewSource = mergedShoppingItems().map(shoppingLine);
+  if (!shoppingReviewSource.length) return toast('Shopping list is empty');
+  els.shoppingReviewList.innerHTML = '';
+  shoppingReviewSource.forEach(line => addShoppingReviewRow(line));
+  els.shoppingReviewDialog.showModal();
+}
 
-                <span class="shopping-qty">
-                  ${escapeHtml(formatQty(i))}
-                </span>
-              </div>
-            `
-          )
-          .join('')
-      : `
-        <div class="empty-state">
-          Schedule meals this week to build a shopping list.
-        </div>
-      `;
+function addShoppingReviewRow(text) {
+  const row = document.createElement('div');
+  row.className = 'shopping-review-row';
+  row.innerHTML = `<input class="shopping-review-input" value="${escapeHtml(text)}" aria-label="Shopping item"><button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
+  row.querySelector('.shopping-review-remove').addEventListener('click', () => row.remove());
+  els.shoppingReviewList.appendChild(row);
+}
 
-  els.shoppingJson.textContent =
-    JSON.stringify(
-      shoppingPayload(),
-      null,
-      2
-    );
+function reviewedShoppingText() {
+  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-input')]
+    .map(input => input.value.trim()).filter(Boolean).join('\n');
+}
+
+async function copyReviewedShopping() {
+  const text = reviewedShoppingText();
+  if (!text) return toast('Shopping list is empty');
+  await navigator.clipboard.writeText(text);
+  toast('Reviewed shopping list copied');
+}
+
+async function sendReviewedShopping() {
+  const text = reviewedShoppingText();
+  if (!text) return toast('Shopping list is empty');
+  await navigator.clipboard.writeText(text);
+  els.shoppingReviewDialog.close();
+  const url = `shortcuts://run-shortcut?name=${encodeURIComponent(settings.shortcutName || 'Kitchen Week to Reminders')}&input=clipboard`;
+  window.location.href = url;
 }
 
 
@@ -1443,7 +1509,7 @@ function openRecipeView(recipe) {
   if (!recipe) return;
   viewedRecipeId = recipe.id;
   els.recipeViewName.textContent = recipe.name || 'Recipe';
-  els.recipeViewMeta.textContent = recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : 'Prep time not set';
+  els.recipeViewMeta.textContent = `${recipe.prepTimeMin ? `${recipe.prepTimeMin} min · ` : ''}Serves ${recipeServingCount(recipe)}`;
   els.recipeViewTags.innerHTML = `<span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(recipe))}</span>` + (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
   const groups = new Map();
@@ -1590,6 +1656,8 @@ function openRecipe(
   els.prepTime.value =
     recipe?.prepTimeMin ?? '';
 
+  els.recipeServings.value = recipeServingCount(recipe);
+
   els.photoUrl.value =
     recipe?.photoUrl || '';
 
@@ -1683,6 +1751,9 @@ async function saveRecipe(ev) {
     prepTimeMin:
       Number(els.prepTime.value) || 0,
 
+    servings:
+      Math.max(1, Number(els.recipeServings.value) || 2),
+
     photoUrl:
       els.photoUrl.value.trim(),
 
@@ -1775,7 +1846,9 @@ function openSlot(date, meal = 'dinner') {
   els.slotTitle.textContent = date.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
   els.slotSearch.value = '';
   els.suggestionReason.textContent = '';
-  els.removeMeal.hidden = !scheduleFor(date, meal);
+  const existingSlot = scheduleFor(date, meal);
+  els.slotPeople.value = slotPeopleCount(existingSlot, existingSlot ? recipeById(existingSlot.recipeId) : null);
+  els.removeMeal.hidden = !existingSlot;
   renderSlotRecipes();
   els.slotDialog.showModal();
 }
@@ -1816,7 +1889,7 @@ function renderSlotRecipes() {
     const mealMismatch = !recipeSupportsMeal(r, currentSlotMeal);
     const note = mealMismatch
       ? `${recipeMealTypeLabel(r)} recipe · manual override`
-      : reason || `${r.prepTimeMin||0} min · eligible`;
+      : reason || `Serves ${recipeServingCount(r)} · ${r.prepTimeMin||0} min · eligible`;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `slot-option${(reason || mealMismatch) ? ' disabled' : ''}`;
@@ -1836,6 +1909,7 @@ async function assignMeal(recipeId, status) {
     recipeId,
     status,
     locked: false,
+    people: Math.max(1, Number(els.slotPeople.value) || Number(settings.defaultPeople) || 2),
     updatedAt: serverTimestamp()
   }, {merge:true});
   els.slotDialog.close();
@@ -1935,7 +2009,7 @@ async function suggestWeekDays() {
       if (!eligible.length) { skipped++; continue; }
       const picked = eligible[Math.floor(Math.random() * eligible.length)];
       const slotId = `${dateIso}_${meal}`;
-      const nextSlot = { date: dateIso, meal, recipeId: picked.id, status: 'suggested' };
+      const nextSlot = { date: dateIso, meal, recipeId: picked.id, status: 'suggested', locked: false, people: Math.max(1, Number(settings.defaultPeople) || 2) };
       await setDoc(doc(db,'households',householdId,'schedule',slotId), {...nextSlot, updatedAt:serverTimestamp()}, {merge:true});
       const idx = workingSchedule.findIndex(s => s.date === dateIso && s.meal === meal);
       if (idx >= 0) workingSchedule[idx] = {...workingSchedule[idx], ...nextSlot}; else workingSchedule.push(nextSlot);
@@ -1998,6 +2072,7 @@ async function readRestoreFile(ev) {
 function firestoreSafeRecipe(recipe) {
   const clean = { ...recipe };
   clean.mealType = ['lunch', 'dinner', 'both'].includes(clean.mealType) ? clean.mealType : 'both';
+  clean.servings = Math.max(1, Number(clean.servings) || 2);
   delete clean.id;
   // Firestore export timestamps become plain objects in JSON; replacing them avoids type errors.
   clean.restoredAt = serverTimestamp();
@@ -2037,6 +2112,8 @@ function syncSettingsForm() {
   els.avoidSameWeek.checked =
     settings.avoidSameWeek !== false;
 
+  els.defaultPeople.value = Math.max(1, Number(settings.defaultPeople) || 2);
+
   els.shortcutName.value =
     settings.shortcutName ||
     'Kitchen Week to Reminders';
@@ -2057,6 +2134,9 @@ async function saveSettings(ev) {
 
     avoidSameWeek:
       els.avoidSameWeek.checked,
+
+    defaultPeople:
+      Math.max(1, Number(els.defaultPeople.value) || 2),
 
     shortcutName:
       els.shortcutName.value.trim() ||
@@ -2107,31 +2187,7 @@ async function copyShopping() {
 }
 
 
-async function runShortcut() {
-  const text =
-    shoppingText();
-
-  if (!text) {
-    return toast(
-      'Shopping list is empty'
-    );
-  }
-
-  await navigator.clipboard.writeText(
-    text
-  );
-
-  const url =
-    `shortcuts://run-shortcut?name=${
-      encodeURIComponent(
-        settings.shortcutName ||
-        'Kitchen Week to Reminders'
-      )
-    }&input=clipboard`;
-
-  window.location.href =
-    url;
-}
+function runShortcut() { openShoppingReview(); }
 
 
 /* -------------------------------------------------------
@@ -2390,6 +2446,10 @@ function wireUi() {
     'click',
     copyShopping
   );
+
+  els.reviewShopping.addEventListener('click', openShoppingReview);
+  els.copyReviewedShopping.addEventListener('click', copyReviewedShopping);
+  els.sendReviewedShopping.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(
     'click',
