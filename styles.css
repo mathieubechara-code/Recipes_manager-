@@ -306,3 +306,86 @@ dialog::backdrop { background: rgba(58,50,41,.35); backdrop-filter: blur(3px); }
 @media (min-width: 760px) {
   .today-meals { grid-template-columns: 1fr 1fr; }
 }
+
+
+/* v1.5 — How to use + lock/regenerate */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.how-to-button {
+  border: 2px solid var(--sage, #73836b);
+  background: #fffdf8;
+  color: var(--ink, #2f312c);
+  border-radius: 999px;
+  padding: 10px 15px;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(47,49,44,.08);
+}
+
+.how-to-button::first-letter { font-weight: 900; }
+
+.how-to-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.how-to-steps section {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(47,49,44,.10);
+}
+
+.how-to-number {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sage, #73836b);
+  color: white;
+  font-weight: 800;
+}
+
+.how-to-steps p { margin: 4px 0 0; }
+.how-to-example { margin-top: 14px; }
+
+.meal-slot-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.meal-slot-control {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(47,49,44,.16);
+  background: #fffdf8;
+}
+
+.meal-slot-control.is-locked {
+  background: #eef1e9;
+  border-color: var(--sage, #73836b);
+}
+
+.meal-slot-control:disabled,
+.today-regenerate-meal:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .topbar { align-items: flex-start; }
+  .topbar-actions { gap: 6px; }
+  .how-to-button { padding: 9px 11px; font-size: .88rem; }
+  .week-action-buttons { width: 100%; }
+  .week-action-buttons button { flex: 1 1 auto; }
+}
