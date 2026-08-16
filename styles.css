@@ -1269,3 +1269,65 @@ main { padding-top: 8px; }
 
 /* Unlimited recipe duration input */
 #prepTime[type="number"] { width: 100%; min-height: 44px; font: inherit; font-weight: 700; }
+
+
+/* V1.7 beta — audited shopping review and resilience polish */
+.shopping-review-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto 38px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.shopping-review-row:last-child { border-bottom: 0; }
+.shopping-review-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(100px, .75fr);
+  gap: 7px;
+  min-width: 0;
+}
+.shopping-review-name,
+.shopping-review-qty { min-width: 0; }
+.shopping-review-ignore {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f2e9;
+  color: var(--sage-dark);
+  padding: 8px 10px;
+  font-weight: 800;
+  font-size: .74rem;
+}
+.shopping-review-row.is-ignored {
+  opacity: .48;
+  background: #f7f4ee;
+}
+.shopping-review-row.is-ignored .shopping-review-name,
+.shopping-review-row.is-ignored .shopping-review-qty { text-decoration: line-through; }
+.shopping-review-remove {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #fbefeb;
+  color: #944d3b;
+  font-size: 1.15rem;
+}
+
+@media (max-width: 560px) {
+  .shopping-review-row {
+    grid-template-columns: 28px minmax(0, 1fr) 36px;
+    align-items: start;
+  }
+  .shopping-review-fields {
+    grid-template-columns: 1fr;
+  }
+  .shopping-review-ignore {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .shopping-review-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

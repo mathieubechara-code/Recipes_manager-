@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f0e6" />
+  <meta name="application-name" content="Meal Planner Beta" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Meal Planner" />
@@ -12,7 +13,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1630" />
+  <link rel="stylesheet" href="styles.css?v=1700b1" />
 </head>
 <body>
   <div id="appShell">
@@ -302,7 +303,7 @@
         </div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Choose Lunch week, Dinner week, or a full Lunch &amp; Dinner week, then choose the days Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
+      <p class="muted small">Choose Lunch week, Dinner week, or a full Lunch &amp; Dinner week, then choose the days Meal Planner should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
       <label>Plan
         <select id="weekPlanScope">
           <option value="full">Full week — Lunch &amp; Dinner</option>
@@ -337,7 +338,7 @@
       </div>
       <p id="restoreSummary" class="muted"></p>
       <div class="restore-options">
-        <label class="radio-row"><input type="radio" name="restoreMode" value="merge" checked /> <span><strong>Merge</strong><small>Restore backup recipes and keep recipes currently in Kitchen Week.</small></span></label>
+        <label class="radio-row"><input type="radio" name="restoreMode" value="merge" checked /> <span><strong>Merge</strong><small>Restore backup recipes and keep recipes currently in Meal Planner.</small></span></label>
         <label class="radio-row"><input type="radio" name="restoreMode" value="replace" /> <span><strong>Replace recipes</strong><small>Delete current recipes first, then restore this backup. Meal schedule entries are kept.</small></span></label>
       </div>
       <div class="dialog-actions">
@@ -354,7 +355,7 @@
       <div class="dialog-title-row">
         <div>
           <p class="eyebrow">Quick guide</p>
-          <h2>How to use Kitchen Week</h2>
+          <h2>How to use Meal Planner</h2>
         </div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
@@ -367,7 +368,7 @@
       </div>
       <div class="how-to-example card">
         <strong>Example</strong>
-        <p class="small">You like Monday Salmon and Thursday Burrito → lock them 🔒 → tap Regenerate unlocked → Kitchen Week changes the other meals only.</p>
+        <p class="small">You like Monday Salmon and Thursday Burrito → lock them 🔒 → tap Regenerate unlocked → Meal Planner changes the other meals only.</p>
       </div>
       <div class="dialog-actions"><span class="spacer"></span><button type="button" class="primary close-dialog">Got it</button></div>
     </div>
@@ -379,7 +380,7 @@
         <div><p class="eyebrow">Before Reminders</p><h2>Review shopping list</h2></div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Edit wording, remove items, or select two or more rows and merge them into your own shopping item name. These edits apply to this send only.</p>
+      <p class="muted small">Edit the ingredient or quantity, ignore items you already have, or select two or more rows and merge them. These edits apply to this send only.</p>
       <div class="shopping-review-toolbar">
         <button id="mergeSelectedShopping" type="button" class="secondary" disabled>Merge selected</button>
         <span id="shoppingMergeSelectionCount" class="muted small">Select 2+ items to merge</span>
@@ -414,6 +415,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1630"></script>
+  <script type="module" src="app.js?v=1700b1"></script>
 </body>
 </html>

@@ -25,6 +25,8 @@ import {
 
 import { firebaseConfig } from './firebase-config.js';
 
+const APP_BUILD = '1.7.0-beta.1';
+
 
 const els = Object.fromEntries(
   [...document.querySelectorAll('[id]')].map(el => [el.id, el])
@@ -482,7 +484,14 @@ function initFirebase() {
     }
 
     if (householdId) {
-      await attachHousehold(householdId);
+      try {
+        await attachHousehold(householdId);
+      } catch (err) {
+        console.error('Automatic household reconnect failed:', err);
+        els.connectStatus.textContent = `Reconnect failed: ${err.message || err}`;
+        els.mainApp.hidden = true;
+        els.connectPanel.hidden = false;
+      }
     }
   });
 
@@ -526,7 +535,7 @@ async function connectHousehold() {
     els.householdPhrase.value = '';
     els.connectStatus.textContent = '';
 
-    toast('Kitchen connected');
+    toast('Meal Planner connected');
   } catch (err) {
     console.error('Kitchen connection failed:', err);
     els.connectStatus.textContent = `Connection failed: ${err.message || err}`;
@@ -1032,9 +1041,7 @@ function renderRecipes() {
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', `View ${r.name}`);
-    const photo = safePhoto(r.photoUrl || '');
-    card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
-      <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
+    card.innerHTML = `<div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
       <div class="tags recipe-card-tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span><span class="tag recipe-time-tag" aria-label="Preparation time">⏱ ${formatDurationMinutes(Number(r.prepTimeMin) || 15)}</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
       <p class="muted small">${(r.ingredients||[]).length} ingredients · Serves ${recipeServingCount(r)}</p>
       <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
@@ -1455,27 +1462,46 @@ function openShoppingReview() {
 }
 
 function addShoppingReviewRow(text, options = {}) {
+  const parsed = parseShoppingReviewLine(text);
   const row = document.createElement('div');
   row.className = 'shopping-review-row';
   row.innerHTML = `
     <label class="shopping-review-select" title="Select item for manual merge">
       <input class="shopping-review-checkbox" type="checkbox" aria-label="Select shopping item for merge">
     </label>
-    <input class="shopping-review-input" value="${escapeHtml(text)}" aria-label="Shopping item">
+    <div class="shopping-review-fields">
+      <input class="shopping-review-name" value="${escapeHtml(parsed.name)}" aria-label="Ingredient name" placeholder="Ingredient">
+      <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity)}" aria-label="Ingredient quantity" placeholder="Quantity">
+    </div>
+    <button type="button" class="shopping-review-ignore" aria-pressed="false">Ignore</button>
     <button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
+
   const checkbox = row.querySelector('.shopping-review-checkbox');
+  const ignore = row.querySelector('.shopping-review-ignore');
   checkbox.checked = !!options.selected;
   checkbox.addEventListener('change', updateShoppingMergeToolbar);
+
+  const setIgnored = ignored => {
+    row.classList.toggle('is-ignored', ignored);
+    ignore.textContent = ignored ? 'Use' : 'Ignore';
+    ignore.setAttribute('aria-pressed', String(ignored));
+    checkbox.checked = false;
+    checkbox.disabled = ignored;
+    updateShoppingMergeToolbar();
+  };
+  ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored')));
   row.querySelector('.shopping-review-remove').addEventListener('click', () => {
     row.remove();
     updateShoppingMergeToolbar();
   });
+
   els.shoppingReviewList.appendChild(row);
-  updateShoppingMergeToolbar();
+  setIgnored(!!options.ignored);
 }
 
 function selectedShoppingReviewRows() {
   return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
+    .filter(row => !row.classList.contains('is-ignored'))
     .filter(row => row.querySelector('.shopping-review-checkbox')?.checked);
 }
 
@@ -1538,7 +1564,10 @@ function mergeReviewQuantities(quantityStrings = []) {
 function mergeSelectedShoppingRows() {
   const rows = selectedShoppingReviewRows();
   if (rows.length < 2) return;
-  const parsed = rows.map(row => parseShoppingReviewLine(row.querySelector('.shopping-review-input')?.value || ''));
+  const parsed = rows.map(row => ({
+    name: row.querySelector('.shopping-review-name')?.value.trim() || '',
+    quantity: row.querySelector('.shopping-review-qty')?.value.trim() || ''
+  }));
   const suggestedName = parsed[0]?.name || 'Merged item';
   const customName = prompt('Name the merged shopping item:', suggestedName);
   if (customName == null) return;
@@ -1546,9 +1575,9 @@ function mergeSelectedShoppingRows() {
   if (!name) return toast('Enter a name for the merged item');
 
   const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
-  const mergedLine = `${name}${mergedQuantity ? ` — ${mergedQuantity}` : ''}`;
   const firstRow = rows[0];
-  firstRow.querySelector('.shopping-review-input').value = mergedLine;
+  firstRow.querySelector('.shopping-review-name').value = name;
+  firstRow.querySelector('.shopping-review-qty').value = mergedQuantity;
   firstRow.querySelector('.shopping-review-checkbox').checked = false;
   rows.slice(1).forEach(row => row.remove());
   updateShoppingMergeToolbar();
@@ -1556,8 +1585,15 @@ function mergeSelectedShoppingRows() {
 }
 
 function reviewedShoppingText() {
-  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-input')]
-    .map(input => input.value.trim()).filter(Boolean).join('\n');
+  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
+    .filter(row => !row.classList.contains('is-ignored'))
+    .map(row => {
+      const name = row.querySelector('.shopping-review-name')?.value.trim() || '';
+      const quantity = row.querySelector('.shopping-review-qty')?.value.trim() || '';
+      return name ? `${name}${quantity ? ` — ${quantity}` : ''}` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 async function copyReviewedShopping() {
@@ -2403,7 +2439,7 @@ function downloadRecipeBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `kitchen-week-recipes-${iso(new Date())}.json`;
+  a.download = `meal-planner-recipes-${iso(new Date())}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -2640,11 +2676,11 @@ function wireUi() {
       )
     );
 
-  els.howToUseButton.addEventListener('click', () => els.howToUseDialog.showModal());
-  els.regenerateUnlockedButton.addEventListener('click', regenerateUnlockedWeek);
-  els.recipeIngredientsTab.addEventListener('click', () => setRecipeReaderSection('ingredients'));
-  els.recipeStepsTab.addEventListener('click', () => setRecipeReaderSection('steps'));
-  els.recipeReaderScroll.addEventListener('scroll', onRecipeReaderScroll, { passive: true });
+  els.howToUseButton?.addEventListener('click', () => els.howToUseDialog.showModal());
+  els.regenerateUnlockedButton?.addEventListener('click', regenerateUnlockedWeek);
+  els.recipeIngredientsTab?.addEventListener('click', () => setRecipeReaderSection('ingredients'));
+  els.recipeStepsTab?.addEventListener('click', () => setRecipeReaderSection('steps'));
+  els.recipeReaderScroll?.addEventListener('scroll', onRecipeReaderScroll, { passive: true });
 
   els.prevDay.addEventListener('click', () => {
     selectedDay = addDays(selectedDay, -1);
@@ -2733,18 +2769,18 @@ function wireUi() {
   els.parseRecipeButton.addEventListener('click', parseAndReviewRecipe);
   els.planWeekButton.addEventListener('click', openWeekPlanner);
   els.clearVisibleWeekButton.addEventListener('click', clearVisibleWeek);
-  els.closeViewedRecipe.addEventListener('click', closeViewedRecipe);
-  els.editViewedRecipe.addEventListener('click', editViewedRecipe);
-  enableRecipePullToClose();
-  els.weekPlanScope.addEventListener('change', renderWeekPlanDays);
-  els.selectAllWeekDays.addEventListener('click', () => setWeekPlannerSelection('all'));
-  els.selectEmptyWeekDays.addEventListener('click', () => setWeekPlannerSelection('empty'));
-  els.clearWeekDays.addEventListener('click', () => setWeekPlannerSelection('clear'));
-  els.suggestSelectedDays.addEventListener('click', suggestWeekDays);
-  els.downloadRecipeBackup.addEventListener('click', downloadRecipeBackup);
-  els.restoreRecipeBackup.addEventListener('click', chooseRestoreFile);
-  els.restoreRecipeFile.addEventListener('change', readRestoreFile);
-  els.confirmRestoreRecipes.addEventListener('click', restoreRecipesFromBackup);
+  els.closeViewedRecipe?.addEventListener('click', closeViewedRecipe);
+  els.editViewedRecipe?.addEventListener('click', editViewedRecipe);
+  if (els.recipeViewDialog && els.recipeReaderScroll) enableRecipePullToClose();
+  els.weekPlanScope?.addEventListener('change', renderWeekPlanDays);
+  els.selectAllWeekDays?.addEventListener('click', () => setWeekPlannerSelection('all'));
+  els.selectEmptyWeekDays?.addEventListener('click', () => setWeekPlannerSelection('empty'));
+  els.clearWeekDays?.addEventListener('click', () => setWeekPlannerSelection('clear'));
+  els.suggestSelectedDays?.addEventListener('click', suggestWeekDays);
+  els.downloadRecipeBackup?.addEventListener('click', downloadRecipeBackup);
+  els.restoreRecipeBackup?.addEventListener('click', chooseRestoreFile);
+  els.restoreRecipeFile?.addEventListener('change', readRestoreFile);
+  els.confirmRestoreRecipes?.addEventListener('click', restoreRecipesFromBackup);
 
   els.addIngredient.addEventListener(
     'click',
@@ -2752,8 +2788,8 @@ function wireUi() {
       addIngredientRow()
   );
 
-  els.recipeServings.addEventListener('input', updateRecipeServingsAndQuantities);
-  els.recipeServings.addEventListener('change', updateRecipeServingsAndQuantities);
+  els.recipeServings?.addEventListener('input', updateRecipeServingsAndQuantities);
+  els.recipeServings?.addEventListener('change', updateRecipeServingsAndQuantities);
 
   const updatePrepTimeLabel = () => {
     els.prepTimeValue.textContent = formatDurationMinutes(els.prepTime.value);
@@ -2793,8 +2829,8 @@ function wireUi() {
     renderRecipes
   );
 
-  els.slotPeople.addEventListener('input', updateCurrentSlotPeople);
-  els.slotPeople.addEventListener('change', updateCurrentSlotPeople);
+  els.slotPeople?.addEventListener('input', updateCurrentSlotPeople);
+  els.slotPeople?.addEventListener('change', updateCurrentSlotPeople);
 
   els.slotSearch.addEventListener(
     'input',
@@ -2835,10 +2871,10 @@ function wireUi() {
     copyShopping
   );
 
-  els.reviewShopping.addEventListener('click', openShoppingReview);
-  els.copyReviewedShopping.addEventListener('click', copyReviewedShopping);
-  els.mergeSelectedShopping.addEventListener('click', mergeSelectedShoppingRows);
-  els.sendReviewedShopping.addEventListener('click', sendReviewedShopping);
+  els.reviewShopping?.addEventListener('click', openShoppingReview);
+  els.copyReviewedShopping?.addEventListener('click', copyReviewedShopping);
+  els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
+  els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(
     'click',
@@ -2851,5 +2887,32 @@ function wireUi() {
    Start app
 ------------------------------------------------------- */
 
-wireUi();
-initFirebase();
+function reportStartupIssue(context, err) {
+  console.error(`[Meal Planner ${APP_BUILD}] ${context}:`, err);
+  const message = `Something went wrong in ${context}. Reload the page; your saved data is not deleted.`;
+  if (els.connectStatus && (!els.mainApp || els.mainApp.hidden)) {
+    els.connectStatus.textContent = message;
+  } else if (els.toast) {
+    toast(message);
+  }
+}
+
+window.addEventListener('unhandledrejection', event => {
+  console.error(`[Meal Planner ${APP_BUILD}] Unhandled promise rejection:`, event.reason);
+});
+
+console.info(`Meal Planner ${APP_BUILD}`);
+
+try {
+  wireUi();
+} catch (err) {
+  // Connection controls are wired first, so a later optional UI mismatch should
+  // never make the household/login screen completely inert again.
+  reportStartupIssue('UI startup', err);
+}
+
+try {
+  initFirebase();
+} catch (err) {
+  reportStartupIssue('Firebase startup', err);
+}
