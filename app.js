@@ -678,34 +678,130 @@ function mealLabel(meal) {
   return meal === 'lunch' ? 'Lunch' : 'Dinner';
 }
 
+
+function slotIsLocked(slot) {
+  return slot?.locked === true;
+}
+
+async function setMealLocked(date, meal, locked) {
+  const slot = scheduleFor(date, meal);
+  if (!slot) return;
+  await setDoc(
+    doc(db, 'households', householdId, 'schedule', slot.id || `${iso(date)}_${meal}`),
+    { locked, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  toast(locked ? `${mealLabel(meal)} locked` : `${mealLabel(meal)} unlocked`);
+}
+
+function eligibleRecipesFor(date, meal, currentRecipeId = '') {
+  const virtualSchedule = schedule.filter(s => !(s.date === iso(date) && s.meal === meal));
+  return recipes.filter(r =>
+    r.id !== currentRecipeId &&
+    recipeSupportsMeal(r, meal) &&
+    !exclusionReasonAgainst(r, date, virtualSchedule, meal)
+  );
+}
+
+async function regenerateMeal(date, meal) {
+  const slot = scheduleFor(date, meal);
+  if (slotIsLocked(slot)) return toast('Unlock this meal before regenerating it');
+  const eligible = eligibleRecipesFor(date, meal, slot?.recipeId || '');
+  if (!eligible.length) return toast(`No other eligible ${mealLabel(meal).toLowerCase()} recipe`);
+  const picked = eligible[Math.floor(Math.random() * eligible.length)];
+  const slotId = `${iso(date)}_${meal}`;
+  await setDoc(
+    doc(db, 'households', householdId, 'schedule', slotId),
+    {
+      date: iso(date),
+      meal,
+      recipeId: picked.id,
+      status: 'suggested',
+      locked: false,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+  toast(`${mealLabel(meal)} regenerated`);
+}
+
+async function regenerateUnlockedWeek() {
+  const start = iso(weekStart);
+  const end = iso(addDays(weekStart, 6));
+  const targets = schedule.filter(s =>
+    s.date >= start &&
+    s.date <= end &&
+    (s.meal === 'lunch' || s.meal === 'dinner') &&
+    !slotIsLocked(s)
+  );
+  if (!targets.length) return toast('No unlocked scheduled meals to regenerate');
+  if (!confirm(`Regenerate ${targets.length} unlocked meal${targets.length === 1 ? '' : 's'} in this week? Locked meals will stay unchanged.`)) return;
+
+  let changed = 0;
+  for (const slot of targets) {
+    const date = parseIsoLocal(slot.date);
+    const eligible = eligibleRecipesFor(date, slot.meal, slot.recipeId);
+    if (!eligible.length) continue;
+    const picked = eligible[Math.floor(Math.random() * eligible.length)];
+    await setDoc(
+      doc(db, 'households', householdId, 'schedule', slot.id || `${slot.date}_${slot.meal}`),
+      {
+        date: slot.date,
+        meal: slot.meal,
+        recipeId: picked.id,
+        status: 'suggested',
+        locked: false,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+    changed++;
+  }
+  toast(changed ? `Regenerated ${changed} meal${changed === 1 ? '' : 's'}` : 'No eligible replacements found');
+}
+
 /* -------------------------------------------------------
    Today / Day view
 ------------------------------------------------------- */
+
+function statusMarkup(slot) {
+  if (!slot) return '';
+  return slot.status === 'suggested'
+    ? '<span class="status-pill status-suggested">App suggested</span>'
+    : '<span class="status-pill status-confirmed">You confirmed</span>';
+}
 
 function renderTodayMeal(date, meal) {
   const slot = scheduleFor(date, meal);
   const recipe = slot && recipeById(slot.recipeId);
   const card = document.createElement('article');
-  card.className = `card today-meal-card${slot ? ' has-meal' : ''}`;
-
-  const status = slot?.status === 'suggested'
-    ? '<span class="status-pill status-suggested">Suggested</span>'
-    : slot ? '<span class="status-pill status-confirmed">Confirmed</span>' : '';
+  card.className = `card today-meal-card${slot ? ' has-meal' : ''}${slotIsLocked(slot) ? ' is-locked' : ''}`;
 
   card.innerHTML = `
     <div class="today-meal-topline">
       <span class="today-meal-label">${mealLabel(meal)}</span>
-      ${status}
+      ${statusMarkup(slot)}
     </div>
     ${recipe
-      ? `<button type="button" class="today-recipe-link"><span class="today-recipe-name">${escapeHtml(recipe.name)}</span><span class="muted small">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : 'View recipe'}</span></button>
-         <div class="button-row today-meal-actions"><button type="button" class="secondary today-change-meal">Change</button><button type="button" class="secondary today-remove-meal">Remove</button></div>`
+      ? `<button type="button" class="today-recipe-link" aria-label="View ${escapeHtml(recipe.name)} recipe">
+           <span class="today-recipe-name">${escapeHtml(recipe.name)}</span>
+           <span class="recipe-tap-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
+         </button>
+         <div class="today-meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}${slotIsLocked(slot) ? `${recipe.prepTimeMin ? ' · ' : ''}🔒 Locked` : ''}</div>
+         <div class="today-meal-actions" role="group" aria-label="${mealLabel(meal)} actions">
+           <button type="button" class="meal-action today-lock-meal ${slotIsLocked(slot) ? 'is-active' : ''}" title="${slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal'}"><span aria-hidden="true">🔒</span><span>${slotIsLocked(slot) ? 'Unlock' : 'Lock'}</span></button>
+           <button type="button" class="meal-action today-regenerate-meal" ${slotIsLocked(slot) ? 'disabled' : ''} title="Regenerate this meal"><span aria-hidden="true">↻</span><span>Regenerate</span></button>
+           <button type="button" class="meal-action today-change-meal" title="Choose a different recipe"><span aria-hidden="true">⇄</span><span>Change</span></button>
+           <button type="button" class="meal-action danger-action today-remove-meal" title="Remove this meal"><span aria-hidden="true">⌫</span><span>Remove</span></button>
+         </div>`
       : `<div class="empty-state today-empty">No ${mealLabel(meal).toLowerCase()} scheduled.</div><button type="button" class="primary today-add-meal">Choose ${mealLabel(meal).toLowerCase()}</button>`}
   `;
 
   if (recipe) {
     card.querySelector('.today-recipe-link').addEventListener('click', () => openRecipeView(recipe));
     card.querySelector('.today-change-meal').addEventListener('click', () => openSlot(date, meal));
+    card.querySelector('.today-lock-meal').addEventListener('click', () => setMealLocked(date, meal, !slotIsLocked(slot)));
+    card.querySelector('.today-regenerate-meal').addEventListener('click', () => regenerateMeal(date, meal));
     card.querySelector('.today-remove-meal').addEventListener('click', async () => {
       const slotId = `${iso(date)}_${meal}`;
       await deleteDoc(doc(db, 'households', householdId, 'schedule', slotId)).catch(() => {});
@@ -736,18 +832,17 @@ function renderMealSlot(date, meal) {
   const slot = scheduleFor(date, meal);
   const recipe = slot && recipeById(slot.recipeId);
   const wrap = document.createElement('div');
-  wrap.className = `meal-slot${slot ? ' has-meal' : ''}`;
+  wrap.className = `meal-slot${slot ? ' has-meal' : ''}${slotIsLocked(slot) ? ' is-locked' : ''}`;
 
   const main = document.createElement('button');
   main.type = 'button';
   main.className = 'meal-slot-main';
-  const status = slot?.status === 'suggested'
-    ? '<span class="status-pill status-suggested">Suggested</span>'
-    : slot ? '<span class="status-pill status-confirmed">Confirmed</span>' : '';
   main.innerHTML = `
-    <span class="meal-slot-label">${mealLabel(meal)}</span>
+    <span class="meal-slot-header"><span class="meal-slot-label">${mealLabel(meal)}</span>${statusMarkup(slot)}</span>
     ${recipe
-      ? `<span class="meal-name">${escapeHtml(recipe.name)}</span><span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}</span>${status}`
+      ? `<span class="meal-name">${escapeHtml(recipe.name)}</span>
+         <span class="meal-view-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
+         <span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}${slotIsLocked(slot) ? `${recipe.prepTimeMin ? ' · ' : ''}🔒 Locked` : ''}</span>`
       : '<span class="empty-meal">Choose meal</span>'}
   `;
   main.addEventListener('click', () => {
@@ -757,12 +852,50 @@ function renderMealSlot(date, meal) {
   wrap.appendChild(main);
 
   if (recipe) {
+    const actions = document.createElement('div');
+    actions.className = 'meal-slot-actions';
+    actions.setAttribute('role', 'group');
+    actions.setAttribute('aria-label', `${mealLabel(meal)} actions`);
+
+    const lock = document.createElement('button');
+    lock.type = 'button';
+    lock.className = `meal-slot-control${slotIsLocked(slot) ? ' is-locked' : ''}`;
+    lock.textContent = '🔒';
+    lock.title = slotIsLocked(slot) ? 'Unlock meal' : 'Lock meal';
+    lock.setAttribute('aria-label', lock.title);
+    lock.addEventListener('click', () => setMealLocked(date, meal, !slotIsLocked(slot)));
+
+    const regen = document.createElement('button');
+    regen.type = 'button';
+    regen.className = 'meal-slot-control';
+    regen.textContent = '↻';
+    regen.title = 'Regenerate this meal';
+    regen.setAttribute('aria-label', regen.title);
+    regen.disabled = slotIsLocked(slot);
+    regen.addEventListener('click', () => regenerateMeal(date, meal));
+
     const change = document.createElement('button');
     change.type = 'button';
-    change.className = 'meal-slot-change';
-    change.textContent = 'Change';
+    change.className = 'meal-slot-control';
+    change.textContent = '⇄';
+    change.title = 'Change meal';
+    change.setAttribute('aria-label', change.title);
     change.addEventListener('click', () => openSlot(date, meal));
-    wrap.appendChild(change);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'meal-slot-control meal-slot-remove';
+    remove.textContent = '⌫';
+    remove.title = 'Remove meal';
+    remove.setAttribute('aria-label', remove.title);
+    remove.addEventListener('click', async () => {
+      const slotId = `${iso(date)}_${meal}`;
+      await deleteDoc(doc(db, 'households', householdId, 'schedule', slotId)).catch(() => {});
+      toast(`${mealLabel(meal)} removed`);
+    });
+
+    actions.append(lock, regen, change, remove);
+    wrap.appendChild(actions);
   }
   return wrap;
 }
@@ -1429,6 +1562,7 @@ async function assignMeal(recipeId, status) {
     meal: currentSlotMeal,
     recipeId,
     status,
+    locked: false,
     updatedAt: serverTimestamp()
   }, {merge:true});
   els.slotDialog.close();
@@ -1812,6 +1946,9 @@ function wireUi() {
         }
       )
     );
+
+  els.howToUseButton.addEventListener('click', () => els.howToUseDialog.showModal());
+  els.regenerateUnlockedButton.addEventListener('click', regenerateUnlockedWeek);
 
   els.prevDay.addEventListener('click', () => {
     selectedDay = addDays(selectedDay, -1);

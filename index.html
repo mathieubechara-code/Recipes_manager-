@@ -8,11 +8,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Kitchen Week" />
   <title>Kitchen Week</title>
-  <link rel="icon" href="favicon.svg?v=1400" type="image/svg+xml" />
-  <link rel="icon" href="favicon-32.png?v=1400" type="image/png" sizes="32x32" />
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1400" sizes="180x180" />
-  <link rel="manifest" href="site.webmanifest?v=1400" />
-  <link rel="stylesheet" href="styles.css?v=1400" />
+  <link rel="icon" href="favicon.svg?v=1600" type="image/svg+xml" />
+  <link rel="icon" href="favicon-32.png?v=1600" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1600" sizes="180x180" />
+  <link rel="manifest" href="site.webmanifest?v=1600" />
+  <link rel="stylesheet" href="styles.css?v=1600" />
 </head>
 <body>
   <div id="appShell">
@@ -21,7 +21,7 @@
         <p class="eyebrow">Shared meal planning</p>
         <h1>Kitchen Week</h1>
       </div>
-      <button id="settingsButton" class="icon-button" aria-label="Open settings">⚙︎</button>
+      <div class="topbar-actions"><button id="howToUseButton" class="how-to-button" type="button">? How to use</button><button id="settingsButton" class="icon-button" aria-label="Open settings">⚙︎</button></div>
     </header>
 
     <main>
@@ -72,6 +72,12 @@
             </div>
           </div>
 
+          <div class="status-guide" aria-label="Meal status guide">
+            <span class="status-pill status-suggested">App suggested</span><span class="status-guide-text">auto-picked</span>
+            <span class="status-pill status-confirmed">You confirmed</span><span class="status-guide-text">chosen by you</span>
+            <span class="status-guide-lock">🔒</span><span class="status-guide-text">locked from regeneration</span>
+          </div>
+
           <div class="card week-actions-card">
             <div>
               <strong>Plan lunch & dinner</strong>
@@ -79,6 +85,7 @@
             </div>
             <div class="button-row week-action-buttons">
               <button id="clearVisibleWeekButton" class="danger">Clear week</button>
+              <button id="regenerateUnlockedButton" class="secondary">↻ Regenerate unlocked</button>
               <button id="planWeekButton" class="primary">Plan week</button>
             </div>
           </div>
@@ -297,6 +304,31 @@
     </form>
   </dialog>
 
+
+  <dialog id="howToUseDialog">
+    <div class="dialog-form how-to-dialog">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow">Quick guide</p>
+          <h2>How to use Kitchen Week</h2>
+        </div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <div class="how-to-steps">
+        <section><span class="how-to-number">1</span><div><strong>Plan your week</strong><p class="muted small">Open Week → Plan week to suggest lunches, dinners, or both.</p></div></section>
+        <section><span class="how-to-number">2</span><div><strong>Keep meals you like</strong><p class="muted small">Tap 🔒 on a scheduled meal. Locked meals stay exactly as they are.</p></div></section>
+        <section><span class="how-to-number">3</span><div><strong>Change one suggestion</strong><p class="muted small">Tap ↻ beside a meal to replace only that lunch or dinner with another eligible recipe.</p></div></section>
+        <section><span class="how-to-number">4</span><div><strong>Regenerate the rest</strong><p class="muted small">Tap “Regenerate unlocked” to replace all scheduled meals in the visible week except the ones you locked.</p></div></section>
+        <section><span class="how-to-number">5</span><div><strong>Use Today for daily cooking</strong><p class="muted small">Open Today to see lunch and dinner, move to previous/next days, and open the full recipe.</p></div></section>
+      </div>
+      <div class="how-to-example card">
+        <strong>Example</strong>
+        <p class="small">You like Monday Salmon and Thursday Burrito → lock them 🔒 → tap Regenerate unlocked → Kitchen Week changes the other meals only.</p>
+      </div>
+      <div class="dialog-actions"><span class="spacer"></span><button type="button" class="primary close-dialog">Got it</button></div>
+    </div>
+  </dialog>
+
   <dialog id="settingsDialog">
     <form id="settingsForm" method="dialog" class="dialog-form">
       <div class="dialog-title-row">
@@ -316,6 +348,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1400"></script>
+  <script type="module" src="app.js?v=1600"></script>
 </body>
 </html>
