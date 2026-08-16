@@ -1170,3 +1170,4 @@ main { padding-top: 8px; }
   .slot-people-row { grid-template-columns: 120px 1fr; gap: 9px; }
   .shopping-actions .button-row button { flex: 1 1 auto; }
 }
+\n\n/* V1.6.22 — dynamic recipe serving scaling */\n.ing-qty.qty-scaled-flash {\n  background: #f0f6eb;\n  border-color: #9db493;\n  transition: background .2s ease, border-color .2s ease;\n}\n

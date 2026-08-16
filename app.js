@@ -64,6 +64,7 @@ let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
 let shoppingReviewSource = [];
+let recipeEditorServings = 2;
 let slotPeopleSaveTimer = null;
 
 
@@ -1106,6 +1107,7 @@ function shoppingBaseUnit(unit = '') {
   if (u === 'oz') return { unit: 'g', factor: 28.349523125 };
   if (u === 'l') return { unit: 'ml', factor: 1000 };
   if (u === 'cl') return { unit: 'ml', factor: 10 };
+  if (u === 'tbsp') return { unit: 'tsp', factor: 3 };
   return { unit: u, factor: 1 };
 }
 
@@ -1124,7 +1126,9 @@ function canonicalIngredientName(name = '') {
 
   const tests = [
     [/^(ground beef|minced beef|beef mince|minced meat beef|mince beef)(\b|$)/, 'Ground beef'],
+    [/^(beef|beef meat)(\b|$)/, 'Beef'],
     [/^(ground chicken|minced chicken|chicken mince)(\b|$)/, 'Ground chicken'],
+    [/^(chicken|chicken meat)(\b|$)/, 'Chicken'],
     [/^(chicken breast|chicken breasts|chicken breast fillet|chicken breast fillets|chicken fillet|chicken fillets)(\b|$)/, 'Chicken breast'],
     [/^(chicken thigh|chicken thighs|boneless chicken thigh|boneless chicken thighs)(\b|$)/, 'Chicken thigh'],
     [/^(bell pepper|bell peppers|capsicum|capsicums)(\b|$)/, 'Bell pepper'],
@@ -1144,6 +1148,7 @@ function canonicalIngredientName(name = '') {
     [/^(neutral oil|vegetable oil|canola oil)(\b|$)/, 'Neutral oil'],
     [/^(rice vinegar|rice wine vinegar)(\b|$)/, 'Rice vinegar'],
     [/^(salmon fillet|salmon fillets|salmon filet|salmon filets)(\b|$)/, 'Salmon fillet'],
+    [/^(salmon)(\b|$)/, 'Salmon'],
     [/^(pasta|dry pasta)(\b|$)/, 'Pasta'],
     [/^(rice|white rice)(\b|$)/, 'Rice'],
     [/^(butter|unsalted butter|salted butter)(\b|$)/, 'Butter'],
@@ -1241,8 +1246,31 @@ function recipeServingCount(recipe) {
   return Number.isFinite(n) && n > 0 ? n : 2;
 }
 
+function resolveGenericShoppingNames(entries) {
+  const names = new Set(entries.map(e => e.name));
+  const familyRules = [
+    ['Chicken', ['Chicken breast', 'Chicken thigh', 'Ground chicken']],
+    ['Beef', ['Ground beef']],
+    ['Salmon', ['Salmon fillet']]
+  ];
+
+  for (const [generic, specifics] of familyRules) {
+    if (!names.has(generic)) continue;
+    const present = specifics.filter(name => names.has(name));
+    // Only resolve a generic ingredient when there is exactly one plausible
+    // specific form in this week's plan. This avoids unsafe merges such as
+    // generic chicken when both breast and thigh are scheduled.
+    if (present.length === 1) {
+      entries.forEach(entry => {
+        if (entry.name === generic) entry.name = present[0];
+      });
+    }
+  }
+  return entries;
+}
+
 function mergedShoppingItems() {
-  const map = new Map();
+  const entries = [];
   for (const slot of getWeekSlots(true)) {
     const recipe = recipeById(slot.recipeId);
     if (!recipe) continue;
@@ -1254,43 +1282,69 @@ function mergedShoppingItems() {
       if (!identity.name) continue;
       const base = shoppingBaseUnit(identity.unit);
       const scaled = scaledQuantity(ing.quantity, multiplier, base.factor);
-      const key = `${normalizeText(identity.name)}|${base.unit}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          name: identity.name,
-          unit: base.unit,
-          minQuantity: 0,
-          maxQuantity: 0,
-          hasNumericQuantity: false,
-          textQuantities: [],
-          sources: 0
-        });
-      }
-      const item = map.get(key);
-      item.sources++;
-      if (scaled.min != null && scaled.max != null) {
-        item.minQuantity += scaled.min;
-        item.maxQuantity += scaled.max;
-        item.hasNumericQuantity = true;
-      } else if (scaled.text) {
-        item.textQuantities.push(scaled.text);
-      }
+      entries.push({
+        name: identity.name,
+        unit: base.unit,
+        scaled,
+        sourceRecipeId: recipe.id
+      });
     }
   }
-  return [...map.values()].map(item => ({
-    ...item,
-    quantity: item.hasNumericQuantity && Math.abs(item.maxQuantity - item.minQuantity) < 1e-9
-      ? item.minQuantity
-      : null
-  })).sort((a,b) => a.name.localeCompare(b.name));
+
+  resolveGenericShoppingNames(entries);
+
+  // One shopping row per canonical ingredient name. Quantities with compatible
+  // units are added together; incompatible units are retained as components on
+  // that same row (e.g. Chicken breast — 500 g + 1 piece).
+  const byName = new Map();
+  for (const entry of entries) {
+    const nameKey = normalizeText(entry.name);
+    if (!byName.has(nameKey)) {
+      byName.set(nameKey, {
+        name: entry.name,
+        sources: 0,
+        sourceRecipes: new Set(),
+        components: new Map()
+      });
+    }
+    const item = byName.get(nameKey);
+    item.sources++;
+    item.sourceRecipes.add(entry.sourceRecipeId);
+    const unitKey = entry.unit || '';
+    if (!item.components.has(unitKey)) {
+      item.components.set(unitKey, {
+        unit: unitKey,
+        minQuantity: 0,
+        maxQuantity: 0,
+        hasNumericQuantity: false,
+        textQuantities: []
+      });
+    }
+    const component = item.components.get(unitKey);
+    const scaled = entry.scaled;
+    if (scaled.min != null && scaled.max != null) {
+      component.minQuantity += scaled.min;
+      component.maxQuantity += scaled.max;
+      component.hasNumericQuantity = true;
+    } else if (scaled.text) {
+      component.textQuantities.push(scaled.text);
+    }
+  }
+
+  return [...byName.values()].map(item => ({
+    name: item.name,
+    sources: item.sources,
+    sourceRecipeCount: item.sourceRecipes.size,
+    components: [...item.components.values()]
+  })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function formatQty(item) {
+function formatShoppingComponent(component) {
   const pieces = [];
-  if (item.hasNumericQuantity) {
-    let min = item.minQuantity;
-    let max = item.maxQuantity;
-    let unit = item.unit || '';
+  if (component.hasNumericQuantity) {
+    let min = component.minQuantity;
+    let max = component.maxQuantity;
+    let unit = component.unit || '';
     if (unit === 'g' && min >= 1000 && max >= 1000) { min /= 1000; max /= 1000; unit = 'kg'; }
     if (unit === 'ml' && min >= 1000 && max >= 1000) { min /= 1000; max /= 1000; unit = 'L'; }
     const quantityText = Math.abs(max - min) < 1e-9
@@ -1298,11 +1352,18 @@ function formatQty(item) {
       : `${formatNumber(min)}–${formatNumber(max)}`;
     pieces.push(`${quantityText}${unit ? ` ${unit}` : ''}`);
   }
-  if (item.textQuantities?.length) {
-    const unique = [...new Set(item.textQuantities)];
-    pieces.push(`${unique.join(' + ')}${item.unit ? ` ${item.unit}` : ''}`.trim());
+  if (component.textQuantities?.length) {
+    const unique = [...new Set(component.textQuantities)];
+    pieces.push(`${unique.join(' + ')}${component.unit ? ` ${component.unit}` : ''}`.trim());
   }
   return pieces.join(' + ');
+}
+
+function formatQty(item) {
+  return (item.components || [])
+    .map(formatShoppingComponent)
+    .filter(Boolean)
+    .join(' + ');
 }
 
 function shoppingLine(item) {
@@ -1316,17 +1377,20 @@ function shoppingText() {
 
 function shoppingPayload() {
   return {
-    schema: 'meal-planner.shopping.v2',
+    schema: 'meal-planner.shopping.v3',
     weekStart: iso(weekStart),
     generatedAt: new Date().toISOString(),
     items: mergedShoppingItems().map(i => ({
       name: i.name,
-      quantity: i.quantity,
-      minQuantity: i.hasNumericQuantity ? i.minQuantity : null,
-      maxQuantity: i.hasNumericQuantity ? i.maxQuantity : null,
-      unit: i.unit,
       displayQuantity: formatQty(i),
-      mergedSources: i.sources
+      mergedSources: i.sources,
+      mergedRecipes: i.sourceRecipeCount,
+      components: i.components.map(c => ({
+        unit: c.unit,
+        minQuantity: c.hasNumericQuantity ? c.minQuantity : null,
+        maxQuantity: c.hasNumericQuantity ? c.maxQuantity : null,
+        textQuantities: c.textQuantities
+      }))
     }))
   };
 }
@@ -1334,7 +1398,7 @@ function shoppingPayload() {
 function renderShopping() {
   const items = mergedShoppingItems();
   els.shoppingList.innerHTML = items.length
-    ? items.map(i => `<div class="shopping-item"><span><strong>${escapeHtml(i.name)}</strong>${i.sources > 1 ? `<small class="shopping-merged-note">merged from ${i.sources} recipe entries</small>` : ''}</span><span class="shopping-qty">${escapeHtml(formatQty(i))}</span></div>`).join('')
+    ? items.map(i => `<div class="shopping-item"><span><strong>${escapeHtml(i.name)}</strong>${i.sourceRecipeCount > 1 ? `<small class="shopping-merged-note">merged from ${i.sourceRecipeCount} recipes</small>` : ''}</span><span class="shopping-qty">${escapeHtml(formatQty(i))}</span></div>`).join('')
     : '<div class="empty-state">Schedule meals this week to build a shopping list.</div>';
   els.shoppingJson.textContent = JSON.stringify(shoppingPayload(), null, 2);
 }
@@ -1727,6 +1791,39 @@ function enableRecipePullToClose() {
   });
 }
 
+function scaleRecipeEditorQuantity(raw, ratio) {
+  if (!Number.isFinite(ratio) || ratio <= 0 || Math.abs(ratio - 1) < 1e-9) return String(raw ?? '');
+  if (raw === '' || raw == null) return '';
+  const text = String(raw).trim();
+  const range = text.match(/^(.+?)\s*[–—-]\s*(.+)$/);
+  if (range) {
+    const a = fractionNumber(range[1]);
+    const b = fractionNumber(range[2]);
+    if (a != null && b != null) return `${formatNumber(a * ratio)}–${formatNumber(b * ratio)}`;
+  }
+  const n = fractionNumber(text);
+  if (n != null) return formatNumber(n * ratio);
+  // Non-numeric quantities such as "to taste" are intentionally unchanged.
+  return text;
+}
+
+function updateRecipeServingsAndQuantities() {
+  const nextServings = Number(els.recipeServings.value);
+  if (!Number.isFinite(nextServings) || nextServings < 1) return;
+  const previousServings = Number(recipeEditorServings) || nextServings;
+  if (Math.abs(nextServings - previousServings) < 1e-9) return;
+  const ratio = nextServings / previousServings;
+
+  els.ingredientRows.querySelectorAll('.ingredient-row').forEach(row => {
+    const qty = row.querySelector('.ing-qty');
+    if (!qty) return;
+    qty.value = scaleRecipeEditorQuantity(qty.value, ratio);
+    qty.classList.add('qty-scaled-flash');
+    setTimeout(() => qty.classList.remove('qty-scaled-flash'), 420);
+  });
+  recipeEditorServings = nextServings;
+}
+
 function openRecipe(
   recipe = null
 ) {
@@ -1745,6 +1842,7 @@ function openRecipe(
     recipe?.prepTimeMin ?? '';
 
   els.recipeServings.value = recipeServingCount(recipe);
+  recipeEditorServings = recipeServingCount(recipe);
 
   els.photoUrl.value =
     recipe?.photoUrl || '';
@@ -2520,6 +2618,9 @@ function wireUi() {
     () =>
       addIngredientRow()
   );
+
+  els.recipeServings.addEventListener('input', updateRecipeServingsAndQuantities);
+  els.recipeServings.addEventListener('change', updateRecipeServingsAndQuantities);
 
   els.recipeForm.addEventListener(
     'submit',
