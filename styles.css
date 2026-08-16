@@ -716,15 +716,26 @@ main { padding-top: 8px; }
 }
 
 .today-date-nav { position: relative; }
+.date-picker-control {
+  position: relative;
+  width: 100%;
+}
+.date-picker-control .date-center {
+  width: 100%;
+}
 .native-date-picker {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-  left: 50%;
-  top: 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.001;
+  cursor: pointer;
+  z-index: 3;
+  -webkit-appearance: none;
+  appearance: none;
 }
+/* Keep the visible control underneath while the native date input receives the real tap. */
+.date-picker-control .date-center { pointer-events: none; }
 
 /* Keep all four primary nav destinations on one row. */
 .mockup-tabs {

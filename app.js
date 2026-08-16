@@ -1964,14 +1964,15 @@ function wireUi() {
     renderToday();
   });
 
-  els.todayDay.addEventListener('click', () => {
+  // The date input sits transparently over the visual date button.
+  // This is intentional: iOS Safari only opens its native calendar reliably
+  // when the user taps the <input type="date"> directly.
+  els.todayDatePicker.addEventListener('pointerdown', () => {
     els.todayDatePicker.value = iso(selectedDay);
-    try {
-      if (typeof els.todayDatePicker.showPicker === 'function') els.todayDatePicker.showPicker();
-      else els.todayDatePicker.click();
-    } catch {
-      els.todayDatePicker.click();
-    }
+  });
+
+  els.todayDatePicker.addEventListener('focus', () => {
+    els.todayDatePicker.value = iso(selectedDay);
   });
 
   els.todayDatePicker.addEventListener('change', () => {
