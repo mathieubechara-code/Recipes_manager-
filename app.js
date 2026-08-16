@@ -57,6 +57,9 @@ let currentSlotDate = null;
 let currentSlotMeal = 'dinner';
 let viewedRecipeId = null;
 let unsubscribers = [];
+let recipeReaderCurrentStep = 0;
+let recipeReaderScrollTicking = false;
+
 let pendingRestoreBackup = null;
 
 
@@ -1263,19 +1266,151 @@ function formatIngredientForView(ing) {
   return [qty, ing.unit || '', ing.name || ''].filter(Boolean).join(' ').trim();
 }
 
+function normalizeInstructionText(text = '') {
+  return text
+    .replace(/\r/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\t]+/g, ' ')
+    .replace(/\*\*/g, '')
+    .replace(/&#x9;/gi, ' ')
+    .trim();
+}
+
+function parseInstructionSteps(text = '') {
+  const clean = normalizeInstructionText(text);
+  if (!clean) return [];
+
+  const lines = clean.split('\n').map(line => line.trim()).filter(Boolean);
+  const steps = [];
+  let current = null;
+
+  const numbered = /^(?:step\s*)?(\d{1,2})\s*[\.\)\-:]\s*(.+)$/i;
+  const escapedNumbered = /^(\d{1,2})\\\.\s*(.+)$/;
+  const emojiNumber = /^(\d{1,2})?[\u0030-\u0039]?\ufe0f?\u20e3\s*(.*)$/;
+  const bullet = /^[•*\-–—]\s*(.+)$/;
+
+  function pushCurrent() {
+    if (!current) return;
+    const textValue = current.parts.join(' ').replace(/\s+/g, ' ').trim();
+    if (textValue) steps.push({ text: textValue });
+    current = null;
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^#+\s*/, '').trim();
+    let match = line.match(escapedNumbered) || line.match(numbered);
+
+    if (!match) {
+      const emojiMatch = line.match(emojiNumber);
+      if (emojiMatch && /\u20e3/.test(line)) {
+        match = [line, emojiMatch[1] || '', emojiMatch[2] || ''];
+      }
+    }
+
+    if (match) {
+      pushCurrent();
+      current = { parts: [match[2] || match[1] || line] };
+      continue;
+    }
+
+    const bulletMatch = line.match(bullet);
+    if (bulletMatch) {
+      if (!current) current = { parts: [] };
+      current.parts.push(bulletMatch[1]);
+      continue;
+    }
+
+    // Short standalone headings such as "Prepare the sauce" are kept with the
+    // next instruction instead of becoming visually detached.
+    if (current) {
+      current.parts.push(line);
+    } else {
+      current = { parts: [line] };
+    }
+  }
+  pushCurrent();
+
+  // If a recipe was saved as one large paragraph, split obvious sentence groups
+  // so the cooking view still has usable chronological steps.
+  if (steps.length === 1 && steps[0].text.length > 260) {
+    const chunks = steps[0].text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+    return chunks.map(s => s.trim()).filter(Boolean).map(text => ({ text }));
+  }
+
+  return steps;
+}
+
+function setRecipeReaderSection(section) {
+  const isSteps = section === 'steps';
+  els.recipeIngredientsTab.classList.toggle('active', !isSteps);
+  els.recipeStepsTab.classList.toggle('active', isSteps);
+  els.recipeIngredientsPanel.classList.toggle('active', !isSteps);
+  els.recipeStepsPanel.classList.toggle('active', isSteps);
+
+  if (isSteps) {
+    requestAnimationFrame(() => updateRecipeCurrentStep(true));
+  }
+}
+
+function setRecipeCurrentStep(index, { scroll = false } = {}) {
+  const items = [...els.recipeViewInstructions.querySelectorAll('.recipe-step')];
+  if (!items.length) {
+    els.recipeStepProgressText.textContent = 'No steps';
+    return;
+  }
+
+  recipeReaderCurrentStep = Math.max(0, Math.min(index, items.length - 1));
+  items.forEach((item, i) => {
+    item.classList.toggle('is-current', i === recipeReaderCurrentStep);
+    item.classList.toggle('is-complete', i < recipeReaderCurrentStep);
+    const number = item.querySelector('.recipe-step-number');
+    if (number) number.textContent = i < recipeReaderCurrentStep ? '✓' : String(i + 1);
+  });
+  els.recipeStepProgressText.textContent = `Step ${recipeReaderCurrentStep + 1} of ${items.length}`;
+
+  if (scroll) {
+    items[recipeReaderCurrentStep].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function updateRecipeCurrentStep(force = false) {
+  const stepsPanelActive = els.recipeStepsPanel.classList.contains('active');
+  if (!stepsPanelActive && !force) return;
+  const items = [...els.recipeViewInstructions.querySelectorAll('.recipe-step')];
+  if (!items.length) return;
+
+  const readerRect = els.recipeReaderScroll.getBoundingClientRect();
+  const targetY = readerRect.top + Math.min(readerRect.height * 0.34, 190);
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+
+  items.forEach((item, i) => {
+    const rect = item.getBoundingClientRect();
+    const anchorY = rect.top + Math.min(rect.height * 0.28, 40);
+    const distance = Math.abs(anchorY - targetY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+    }
+  });
+
+  setRecipeCurrentStep(bestIndex);
+}
+
+function onRecipeReaderScroll() {
+  if (recipeReaderScrollTicking) return;
+  recipeReaderScrollTicking = true;
+  requestAnimationFrame(() => {
+    recipeReaderScrollTicking = false;
+    updateRecipeCurrentStep();
+  });
+}
+
 function openRecipeView(recipe) {
   if (!recipe) return;
   viewedRecipeId = recipe.id;
   els.recipeViewName.textContent = recipe.name || 'Recipe';
-  const photo = safePhoto(recipe.photoUrl || '');
-  if (photo) {
-    els.recipeViewPhoto.src = photo;
-    els.recipeViewPhoto.hidden = false;
-  } else {
-    els.recipeViewPhoto.removeAttribute('src');
-    els.recipeViewPhoto.hidden = true;
-  }
-  els.recipeViewMeta.textContent = recipe.prepTimeMin ? `${recipe.prepTimeMin} min prep` : '';
+  els.recipeViewMeta.textContent = recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : 'Prep time not set';
   els.recipeViewTags.innerHTML = `<span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(recipe))}</span>` + (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
   const groups = new Map();
@@ -1284,16 +1419,52 @@ function openRecipeView(recipe) {
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(ing);
   }
+
+  const ingredientCount = (recipe.ingredients || []).length;
+  els.recipeIngredientCount.textContent = ingredientCount ? `${ingredientCount} item${ingredientCount === 1 ? '' : 's'}` : '';
   if (!groups.size) {
     els.recipeViewIngredients.innerHTML = '<p class="muted">No ingredients saved.</p>';
   } else {
     els.recipeViewIngredients.innerHTML = [...groups.entries()].map(([group, items]) => `
-      ${group ? `<h4>${escapeHtml(group)}</h4>` : ''}
-      <ul>${items.map(ing => `<li>${escapeHtml(formatIngredientForView(ing))}</li>`).join('')}</ul>
+      <section class="recipe-ingredient-group">
+        ${group ? `<h4>${escapeHtml(group)}</h4>` : ''}
+        <ul>${items.map(ing => `<li><span class="ingredient-dot" aria-hidden="true"></span><span>${escapeHtml(formatIngredientForView(ing))}</span></li>`).join('')}</ul>
+      </section>
     `).join('');
   }
-  const instructions = (recipe.instructions || '').trim();
-  els.recipeViewInstructions.textContent = instructions || 'No instructions saved.';
+
+  const steps = parseInstructionSteps(recipe.instructions || '');
+  els.recipeStepCount.textContent = steps.length ? `${steps.length} step${steps.length === 1 ? '' : 's'}` : '';
+  if (!steps.length) {
+    els.recipeViewInstructions.innerHTML = '<p class="muted">No instructions saved.</p>';
+    els.recipeStepProgressText.textContent = 'No steps';
+  } else {
+    els.recipeViewInstructions.innerHTML = steps.map((step, i) => `
+      <article class="recipe-step${i === 0 ? ' is-current' : ''}" data-step-index="${i}" tabindex="0" role="button" aria-label="Step ${i + 1}">
+        <div class="recipe-step-rail">
+          <span class="recipe-step-number">${i + 1}</span>
+          <span class="recipe-step-line" aria-hidden="true"></span>
+        </div>
+        <div class="recipe-step-body">
+          <div class="recipe-step-current-label">Current step</div>
+          <p>${escapeHtml(step.text)}</p>
+        </div>
+      </article>
+    `).join('');
+    [...els.recipeViewInstructions.querySelectorAll('.recipe-step')].forEach((item, i) => {
+      item.addEventListener('click', () => setRecipeCurrentStep(i, { scroll: true }));
+      item.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setRecipeCurrentStep(i, { scroll: true });
+        }
+      });
+    });
+    setRecipeCurrentStep(0);
+  }
+
+  setRecipeReaderSection('ingredients');
+  els.recipeReaderScroll.scrollTop = 0;
   els.recipeViewDialog.showModal();
 }
 
@@ -1953,6 +2124,9 @@ function wireUi() {
 
   els.howToUseButton.addEventListener('click', () => els.howToUseDialog.showModal());
   els.regenerateUnlockedButton.addEventListener('click', regenerateUnlockedWeek);
+  els.recipeIngredientsTab.addEventListener('click', () => setRecipeReaderSection('ingredients'));
+  els.recipeStepsTab.addEventListener('click', () => setRecipeReaderSection('steps'));
+  els.recipeReaderScroll.addEventListener('scroll', onRecipeReaderScroll, { passive: true });
 
   els.prevDay.addEventListener('click', () => {
     selectedDay = addDays(selectedDay, -1);

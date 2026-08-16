@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1610" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1610" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1610" />
-  <link rel="stylesheet" href="styles.css?v=1611" />
+  <link rel="stylesheet" href="styles.css?v=1612" />
 </head>
 <body>
   <div id="appShell">
@@ -158,28 +158,46 @@
     </main>
   </div>
 
-  <dialog id="recipeViewDialog">
-    <div class="dialog-form recipe-view">
-      <div class="dialog-title-row">
-        <div>
-          <p class="eyebrow">Recipe</p>
-          <h2 id="recipeViewName">Recipe</h2>
+  <dialog id="recipeViewDialog" class="recipe-reader-dialog">
+    <div class="dialog-form recipe-reader" id="recipeReaderScroll">
+      <div class="recipe-reader-header">
+        <div class="recipe-reader-title-row">
+          <div>
+            <p class="eyebrow">Recipe</p>
+            <h2 id="recipeViewName">Recipe</h2>
+          </div>
+          <button type="button" class="icon-button close-dialog" aria-label="Close recipe">×</button>
         </div>
-        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+        <div id="recipeViewMeta" class="recipe-reader-meta"></div>
+        <div id="recipeViewTags" class="tags recipe-reader-tags"></div>
       </div>
-      <img id="recipeViewPhoto" class="recipe-view-photo" alt="" hidden />
-      <div id="recipeViewMeta" class="recipe-view-meta"></div>
-      <div id="recipeViewTags" class="tags"></div>
-      <section class="recipe-view-section">
-        <h3>Ingredients</h3>
-        <div id="recipeViewIngredients" class="recipe-view-ingredients"></div>
+
+      <nav class="recipe-reader-tabs" aria-label="Recipe sections">
+        <button id="recipeIngredientsTab" type="button" class="recipe-reader-tab active" data-recipe-section="ingredients">Ingredients</button>
+        <button id="recipeStepsTab" type="button" class="recipe-reader-tab" data-recipe-section="steps">Steps</button>
+      </nav>
+
+      <section id="recipeIngredientsPanel" class="recipe-reader-panel active" aria-label="Ingredients">
+        <div class="recipe-panel-heading">
+          <h3>Ingredients</h3>
+          <span id="recipeIngredientCount" class="recipe-panel-count"></span>
+        </div>
+        <div id="recipeViewIngredients" class="recipe-view-ingredients recipe-ingredient-list"></div>
       </section>
-      <section class="recipe-view-section">
-        <h3>Instructions</h3>
-        <div id="recipeViewInstructions" class="recipe-view-instructions"></div>
+
+      <section id="recipeStepsPanel" class="recipe-reader-panel" aria-label="Steps">
+        <div id="recipeStepProgress" class="recipe-step-progress">
+          <span id="recipeStepProgressText">Step 1 of 1</span>
+          <span class="recipe-step-progress-hint">Scroll to follow</span>
+        </div>
+        <div class="recipe-panel-heading recipe-steps-heading">
+          <h3>Steps</h3>
+          <span id="recipeStepCount" class="recipe-panel-count"></span>
+        </div>
+        <div id="recipeViewInstructions" class="recipe-step-timeline"></div>
       </section>
-      <div class="dialog-actions">
-        <span class="spacer"></span>
+
+      <div class="recipe-reader-actions">
         <button id="editViewedRecipe" type="button" class="primary">Edit recipe</button>
       </div>
     </div>
@@ -357,6 +375,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1611"></script>
+  <script type="module" src="app.js?v=1612"></script>
 </body>
 </html>
