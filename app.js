@@ -990,10 +990,31 @@ async function clearVisibleWeek() {
 function renderRecipes() {
   const q = normalizeText(els.recipeSearch.value);
   const tag = els.tagFilter.value;
-  const maxTime = Number(els.recipeTimeFilter?.value || 30);
+
+  // The filter ceiling follows the longest recipe instead of being hard-capped at 30 min.
+  // Keep at least a 60-minute range so the control is useful even with a small collection.
+  if (els.recipeTimeFilter) {
+    const previousMax = Math.max(1, Number(els.recipeTimeFilter.max) || 60);
+    const previousValue = Math.max(1, Number(els.recipeTimeFilter.value) || previousMax);
+    const wasShowingAll = previousValue >= previousMax;
+    const longestRecipe = recipes.reduce((max, recipe) => {
+      const minutes = Math.max(1, Math.round(Number(recipe.prepTimeMin) || 15));
+      return Math.max(max, minutes);
+    }, 60);
+
+    els.recipeTimeFilter.max = String(longestRecipe);
+    if (wasShowingAll || previousValue > longestRecipe) {
+      els.recipeTimeFilter.value = String(longestRecipe);
+    }
+    if (els.recipeTimeFilterValue) {
+      els.recipeTimeFilterValue.textContent = formatDurationMinutes(els.recipeTimeFilter.value);
+    }
+  }
+
+  const maxTime = Number(els.recipeTimeFilter?.value || Number.POSITIVE_INFINITY);
   const filtered = recipes.filter(r => {
     const hay = normalizeText(`${r.name} ${(r.tags || []).join(' ')}`);
-    const recipeTime = Math.min(30, Math.max(1, Number(r.prepTimeMin) || 15));
+    const recipeTime = Math.max(1, Math.round(Number(r.prepTimeMin) || 15));
     return (!q || hay.includes(q))
       && (!tag || (r.tags || []).includes(tag))
       && recipeTime <= maxTime;
@@ -1960,8 +1981,6 @@ function openRecipe(
   els.recipeServings.value = recipeServingCount(recipe);
   recipeEditorServings = recipeServingCount(recipe);
 
-  els.photoUrl.value =
-    recipe?.photoUrl || '';
 
   els.recipeTags.value =
     (recipe?.tags || []).join(', ');
@@ -2056,8 +2075,6 @@ async function saveRecipe(ev) {
     servings:
       Math.max(1, Number(els.recipeServings.value) || 2),
 
-    photoUrl:
-      els.photoUrl.value.trim(),
 
     ingredients,
 
@@ -2761,14 +2778,14 @@ function wireUi() {
 
   const updateRecipeTimeFilter = () => {
     if (els.recipeTimeFilterValue && els.recipeTimeFilter) {
-      els.recipeTimeFilterValue.textContent = `${els.recipeTimeFilter.value} min`;
+      els.recipeTimeFilterValue.textContent = formatDurationMinutes(els.recipeTimeFilter.value);
     }
     renderRecipes();
   };
   els.recipeTimeFilter?.addEventListener('input', updateRecipeTimeFilter);
   els.recipeTimeFilter?.addEventListener('change', updateRecipeTimeFilter);
   if (els.recipeTimeFilterValue && els.recipeTimeFilter) {
-    els.recipeTimeFilterValue.textContent = `${els.recipeTimeFilter.value} min`;
+    els.recipeTimeFilterValue.textContent = formatDurationMinutes(els.recipeTimeFilter.value);
   }
 
   els.tagFilter.addEventListener(

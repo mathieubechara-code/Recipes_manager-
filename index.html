@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1629" />
+  <link rel="stylesheet" href="styles.css?v=1630" />
 </head>
 <body>
   <div id="appShell">
@@ -117,8 +117,8 @@
           <div class="filters card recipe-filters">
             <input id="recipeSearch" type="search" placeholder="Search recipes or tags" />
             <label class="recipe-time-filter" for="recipeTimeFilter">
-              <span class="recipe-time-filter-head"><span>⏱ Max time</span><output id="recipeTimeFilterValue" for="recipeTimeFilter">30 min</output></span>
-              <input id="recipeTimeFilter" class="timing-slider" type="range" min="1" max="30" step="1" value="30" />
+              <span class="recipe-time-filter-head"><span>⏱ Max time</span><output id="recipeTimeFilterValue" for="recipeTimeFilter">1:00</output></span>
+              <input id="recipeTimeFilter" class="timing-slider" type="range" min="1" max="60" step="1" value="60" />
             </label>
             <select id="tagFilter"><option value="">All tags</option></select>
           </div>
@@ -217,10 +217,7 @@
       </div>
       <input id="recipeId" type="hidden" />
       <label>Name<input id="recipeName" required /></label>
-      <div class="two-col">
-        <label>Recipe serves<input id="recipeServings" type="number" min="1" max="30" step="1" value="2" /></label>
-        <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
-      </div>
+      <label>Recipe serves<input id="recipeServings" type="number" min="1" max="30" step="1" value="2" /></label>
       <div class="recipe-classification-row recipe-classification-three">
         <label>Suitable for
           <select id="recipeMealType">
@@ -235,7 +232,7 @@
             <output id="prepTimeValue" for="prepTime">15 min</output>
           </span>
           <input id="prepTime" class="timing-slider" type="number" min="1" step="1" value="15" inputmode="numeric" />
-          <span class="timing-slider-scale" aria-hidden="true"><span>Minutes</span><span>No maximum</span></span>
+          <span class="timing-slider-scale" aria-hidden="true"><span>Minutes</span></span>
         </label>
         <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
       </div>
@@ -417,6 +414,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1629"></script>
+  <script type="module" src="app.js?v=1630"></script>
 </body>
 </html>
