@@ -1421,12 +1421,105 @@ function openShoppingReview() {
   els.shoppingReviewDialog.showModal();
 }
 
-function addShoppingReviewRow(text) {
+function addShoppingReviewRow(text, options = {}) {
   const row = document.createElement('div');
   row.className = 'shopping-review-row';
-  row.innerHTML = `<input class="shopping-review-input" value="${escapeHtml(text)}" aria-label="Shopping item"><button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
-  row.querySelector('.shopping-review-remove').addEventListener('click', () => row.remove());
+  row.innerHTML = `
+    <label class="shopping-review-select" title="Select item for manual merge">
+      <input class="shopping-review-checkbox" type="checkbox" aria-label="Select shopping item for merge">
+    </label>
+    <input class="shopping-review-input" value="${escapeHtml(text)}" aria-label="Shopping item">
+    <button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
+  const checkbox = row.querySelector('.shopping-review-checkbox');
+  checkbox.checked = !!options.selected;
+  checkbox.addEventListener('change', updateShoppingMergeToolbar);
+  row.querySelector('.shopping-review-remove').addEventListener('click', () => {
+    row.remove();
+    updateShoppingMergeToolbar();
+  });
   els.shoppingReviewList.appendChild(row);
+  updateShoppingMergeToolbar();
+}
+
+function selectedShoppingReviewRows() {
+  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
+    .filter(row => row.querySelector('.shopping-review-checkbox')?.checked);
+}
+
+function updateShoppingMergeToolbar() {
+  if (!els.mergeSelectedShopping || !els.shoppingMergeSelectionCount) return;
+  const count = selectedShoppingReviewRows().length;
+  els.mergeSelectedShopping.disabled = count < 2;
+  els.shoppingMergeSelectionCount.textContent = count < 2
+    ? 'Select 2+ items to merge'
+    : `${count} items selected`;
+}
+
+function parseShoppingReviewLine(line = '') {
+  const [namePart, ...qtyParts] = String(line).split(/\s+—\s+/);
+  return {
+    name: (namePart || '').trim(),
+    quantity: qtyParts.join(' — ').trim()
+  };
+}
+
+function parseReviewQuantityTerm(term = '') {
+  const t = String(term).trim();
+  const m = t.match(/^(.+?)\s+([A-Za-zÀ-ÿ.]+(?:\s+[A-Za-zÀ-ÿ.]+)*)$/);
+  if (!m) return null;
+  const rawQty = m[1].trim();
+  const normalizedUnit = normalizeUnitForShopping(m[2].trim());
+  const base = shoppingBaseUnit(normalizedUnit);
+  const scaled = scaledQuantity(rawQty, 1, base.factor);
+  if (scaled.min == null || scaled.max == null) return null;
+  return { unit: base.unit, min: scaled.min, max: scaled.max };
+}
+
+function mergeReviewQuantities(quantityStrings = []) {
+  const totals = new Map();
+  const leftovers = [];
+  for (const quantityString of quantityStrings) {
+    if (!quantityString) continue;
+    const terms = quantityString.split(/\s+\+\s+/).map(v => v.trim()).filter(Boolean);
+    for (const term of terms) {
+      const parsed = parseReviewQuantityTerm(term);
+      if (!parsed) {
+        leftovers.push(term);
+        continue;
+      }
+      const current = totals.get(parsed.unit) || { unit: parsed.unit, min: 0, max: 0 };
+      current.min += parsed.min;
+      current.max += parsed.max;
+      totals.set(parsed.unit, current);
+    }
+  }
+  const merged = [...totals.values()].map(item => {
+    const qty = Math.abs(item.max - item.min) < 1e-9
+      ? formatNumber(item.min)
+      : `${formatNumber(item.min)}–${formatNumber(item.max)}`;
+    return `${qty}${item.unit ? ` ${item.unit}` : ''}`;
+  });
+  return [...merged, ...leftovers].join(' + ');
+}
+
+function mergeSelectedShoppingRows() {
+  const rows = selectedShoppingReviewRows();
+  if (rows.length < 2) return;
+  const parsed = rows.map(row => parseShoppingReviewLine(row.querySelector('.shopping-review-input')?.value || ''));
+  const suggestedName = parsed[0]?.name || 'Merged item';
+  const customName = prompt('Name the merged shopping item:', suggestedName);
+  if (customName == null) return;
+  const name = customName.trim();
+  if (!name) return toast('Enter a name for the merged item');
+
+  const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
+  const mergedLine = `${name}${mergedQuantity ? ` — ${mergedQuantity}` : ''}`;
+  const firstRow = rows[0];
+  firstRow.querySelector('.shopping-review-input').value = mergedLine;
+  firstRow.querySelector('.shopping-review-checkbox').checked = false;
+  rows.slice(1).forEach(row => row.remove());
+  updateShoppingMergeToolbar();
+  toast(`Merged ${rows.length} items as ${name}`);
 }
 
 function reviewedShoppingText() {
@@ -2696,6 +2789,7 @@ function wireUi() {
 
   els.reviewShopping.addEventListener('click', openShoppingReview);
   els.copyReviewedShopping.addEventListener('click', copyReviewedShopping);
+  els.mergeSelectedShopping.addEventListener('click', mergeSelectedShoppingRows);
   els.sendReviewedShopping.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(
