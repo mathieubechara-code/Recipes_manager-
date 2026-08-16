@@ -1422,28 +1422,69 @@ function openShoppingReview() {
 }
 
 function addShoppingReviewRow(text, options = {}) {
+  const parsed = parseShoppingReviewLine(text);
   const row = document.createElement('div');
   row.className = 'shopping-review-row';
+  row.dataset.ignored = options.ignored ? 'true' : 'false';
   row.innerHTML = `
     <label class="shopping-review-select" title="Select item for manual merge">
       <input class="shopping-review-checkbox" type="checkbox" aria-label="Select shopping item for merge">
     </label>
-    <input class="shopping-review-input" value="${escapeHtml(text)}" aria-label="Shopping item">
+    <div class="shopping-review-fields">
+      <label class="shopping-review-field shopping-review-name-field">
+        <span>Ingredient</span>
+        <input class="shopping-review-name" value="${escapeHtml(parsed.name)}" aria-label="Ingredient name">
+      </label>
+      <label class="shopping-review-field shopping-review-qty-field">
+        <span>Quantity</span>
+        <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity)}" aria-label="Ingredient quantity" placeholder="e.g. 500 g">
+      </label>
+    </div>
+    <button type="button" class="shopping-review-ignore" aria-pressed="${options.ignored ? 'true' : 'false'}" title="Ignore this item for this shopping send">
+      <span class="ignore-icon" aria-hidden="true">${options.ignored ? '↩' : '⊘'}</span>
+      <span class="ignore-text">${options.ignored ? 'Use' : 'Ignore'}</span>
+    </button>
     <button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
   const checkbox = row.querySelector('.shopping-review-checkbox');
   checkbox.checked = !!options.selected;
   checkbox.addEventListener('change', updateShoppingMergeToolbar);
+
+  const ignoreButton = row.querySelector('.shopping-review-ignore');
+  ignoreButton.addEventListener('click', () => {
+    const ignored = row.dataset.ignored !== 'true';
+    row.dataset.ignored = ignored ? 'true' : 'false';
+    row.classList.toggle('is-ignored', ignored);
+    ignoreButton.setAttribute('aria-pressed', ignored ? 'true' : 'false');
+    ignoreButton.querySelector('.ignore-icon').textContent = ignored ? '↩' : '⊘';
+    ignoreButton.querySelector('.ignore-text').textContent = ignored ? 'Use' : 'Ignore';
+    if (ignored) checkbox.checked = false;
+    checkbox.disabled = ignored;
+    updateShoppingMergeToolbar();
+  });
+
   row.querySelector('.shopping-review-remove').addEventListener('click', () => {
     row.remove();
     updateShoppingMergeToolbar();
   });
+
+  if (options.ignored) {
+    row.classList.add('is-ignored');
+    checkbox.disabled = true;
+  }
+
   els.shoppingReviewList.appendChild(row);
   updateShoppingMergeToolbar();
 }
 
+function shoppingReviewRowValue(row) {
+  const name = row.querySelector('.shopping-review-name')?.value.trim() || '';
+  const quantity = row.querySelector('.shopping-review-qty')?.value.trim() || '';
+  return { name, quantity, line: `${name}${quantity ? ` — ${quantity}` : ''}` };
+}
+
 function selectedShoppingReviewRows() {
   return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
-    .filter(row => row.querySelector('.shopping-review-checkbox')?.checked);
+    .filter(row => row.dataset.ignored !== 'true' && row.querySelector('.shopping-review-checkbox')?.checked);
 }
 
 function updateShoppingMergeToolbar() {
@@ -1505,7 +1546,7 @@ function mergeReviewQuantities(quantityStrings = []) {
 function mergeSelectedShoppingRows() {
   const rows = selectedShoppingReviewRows();
   if (rows.length < 2) return;
-  const parsed = rows.map(row => parseShoppingReviewLine(row.querySelector('.shopping-review-input')?.value || ''));
+  const parsed = rows.map(shoppingReviewRowValue);
   const suggestedName = parsed[0]?.name || 'Merged item';
   const customName = prompt('Name the merged shopping item:', suggestedName);
   if (customName == null) return;
@@ -1513,9 +1554,9 @@ function mergeSelectedShoppingRows() {
   if (!name) return toast('Enter a name for the merged item');
 
   const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
-  const mergedLine = `${name}${mergedQuantity ? ` — ${mergedQuantity}` : ''}`;
   const firstRow = rows[0];
-  firstRow.querySelector('.shopping-review-input').value = mergedLine;
+  firstRow.querySelector('.shopping-review-name').value = name;
+  firstRow.querySelector('.shopping-review-qty').value = mergedQuantity;
   firstRow.querySelector('.shopping-review-checkbox').checked = false;
   rows.slice(1).forEach(row => row.remove());
   updateShoppingMergeToolbar();
@@ -1523,8 +1564,12 @@ function mergeSelectedShoppingRows() {
 }
 
 function reviewedShoppingText() {
-  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-input')]
-    .map(input => input.value.trim()).filter(Boolean).join('\n');
+  return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
+    .filter(row => row.dataset.ignored !== 'true')
+    .map(row => shoppingReviewRowValue(row).line.trim())
+    .filter(Boolean)
+    .join('
+');
 }
 
 async function copyReviewedShopping() {
