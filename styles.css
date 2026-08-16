@@ -1243,3 +1243,16 @@ main { padding-top: 8px; }
 @media (max-width: 700px) {
   .recipe-classification-three { grid-template-columns: 1fr; gap: 0; }
 }
+
+
+/* V1.6 recipe card timing — visible between meal suitability and tags */
+.recipe-card-tags {
+  align-items: center;
+}
+.recipe-time-tag {
+  background: #edf3e8;
+  color: var(--sage-dark);
+  border: 1px solid #d5e0cf;
+  font-weight: 850;
+  white-space: nowrap;
+}

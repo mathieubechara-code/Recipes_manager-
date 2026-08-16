@@ -1010,8 +1010,8 @@ function renderRecipes() {
     const photo = safePhoto(r.photoUrl || '');
     card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
       <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
-      <div class="tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
-      <p class="muted small">${(r.ingredients||[]).length} ingredients · Serves ${recipeServingCount(r)}${r.prepTimeMin ? ` · ${r.prepTimeMin} min` : ''}</p>
+      <div class="tags recipe-card-tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span><span class="tag recipe-time-tag" aria-label="Preparation time">⏱ ${Math.min(30, Math.max(1, Number(r.prepTimeMin) || 15))} min</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+      <p class="muted small">${(r.ingredients||[]).length} ingredients · Serves ${recipeServingCount(r)}</p>
       <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
     card.addEventListener('click', () => openRecipeView(r));
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecipeView(r); } });
