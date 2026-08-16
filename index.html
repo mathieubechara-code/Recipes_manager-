@@ -50,10 +50,13 @@
 
           <div class="card week-actions-card">
             <div>
-              <strong>Need ideas for several days?</strong>
-              <p class="muted small">Suggest the whole week or choose only the days you want. Existing meals are left alone unless you choose to replace them.</p>
+              <strong>Plan lunch & dinner</strong>
+              <p class="muted small">Suggest meals for the whole week or only selected days. You can also clear every lunch and dinner shown in this week.</p>
             </div>
-            <button id="planWeekButton" class="primary">Plan week</button>
+            <div class="button-row week-action-buttons">
+              <button id="clearVisibleWeekButton" class="danger">Clear week</button>
+              <button id="planWeekButton" class="primary">Plan week</button>
+            </div>
           </div>
 
           <div id="weekGrid" class="week-grid"></div>
@@ -115,6 +118,33 @@
     </main>
   </div>
 
+  <dialog id="recipeViewDialog">
+    <div class="dialog-form recipe-view">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow">Recipe</p>
+          <h2 id="recipeViewName">Recipe</h2>
+        </div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <img id="recipeViewPhoto" class="recipe-view-photo" alt="" hidden />
+      <div id="recipeViewMeta" class="recipe-view-meta"></div>
+      <div id="recipeViewTags" class="tags"></div>
+      <section class="recipe-view-section">
+        <h3>Ingredients</h3>
+        <div id="recipeViewIngredients" class="recipe-view-ingredients"></div>
+      </section>
+      <section class="recipe-view-section">
+        <h3>Instructions</h3>
+        <div id="recipeViewInstructions" class="recipe-view-instructions"></div>
+      </section>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button id="editViewedRecipe" type="button" class="primary">Edit recipe</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="recipeDialog">
     <form id="recipeForm" method="dialog" class="dialog-form">
       <div class="dialog-title-row">
@@ -166,13 +196,13 @@
   <dialog id="slotDialog">
     <form method="dialog" class="dialog-form">
       <div class="dialog-title-row">
-        <div><p class="eyebrow">Dinner</p><h2 id="slotTitle">Choose meal</h2></div>
+        <div><p id="slotMealLabel" class="eyebrow">Dinner</p><h2 id="slotTitle">Choose meal</h2></div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
       <input id="slotSearch" type="search" placeholder="Find a recipe" />
       <div id="slotRecipeList" class="slot-recipe-list"></div>
       <div class="dialog-actions wrap">
-        <button id="suggestMeal" type="button" class="primary">Suggest this day</button>
+        <button id="suggestMeal" type="button" class="primary">Suggest this meal</button>
         <button id="removeMeal" type="button" class="secondary">Remove meal</button>
       </div>
       <p id="suggestionReason" class="muted small"></p>
@@ -188,7 +218,12 @@
         </div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Choose the dinner slots Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you choose to keep them.</p>
+      <p class="muted small">Choose the days and meal slots Kitchen Week should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
+      <div class="meal-choice-row">
+        <strong>Meals</strong>
+        <label class="checkbox-row compact-check"><input id="planLunch" type="checkbox" checked /> Lunch</label>
+        <label class="checkbox-row compact-check"><input id="planDinner" type="checkbox" checked /> Dinner</label>
+      </div>
       <div class="button-row preset-row">
         <button id="selectAllWeekDays" type="button" class="secondary">Select all</button>
         <button id="selectEmptyWeekDays" type="button" class="secondary">Select empty days</button>

@@ -52,6 +52,8 @@ let settings = {
 
 let weekStart = startOfWeek(new Date());
 let currentSlotDate = null;
+let currentSlotMeal = 'dinner';
+let viewedRecipeId = null;
 let unsubscribers = [];
 let pendingRestoreBackup = null;
 
@@ -628,233 +630,128 @@ function renderAll() {
 }
 
 
-function scheduleFor(date) {
+function scheduleFor(date, meal = 'dinner') {
   return schedule.find(
-    s =>
-      s.date === iso(date) &&
-      s.meal === 'dinner'
+    s => s.date === iso(date) && s.meal === meal
   );
 }
-
 
 function recipeById(id) {
   return recipes.find(r => r.id === id);
 }
 
+function mealLabel(meal) {
+  return meal === 'lunch' ? 'Lunch' : 'Dinner';
+}
 
 /* -------------------------------------------------------
    Week / Calendar
 ------------------------------------------------------- */
 
-function renderWeek() {
-  els.weekTitle.textContent =
-    fmtWeekTitle(weekStart);
+function renderMealSlot(date, meal) {
+  const slot = scheduleFor(date, meal);
+  const recipe = slot && recipeById(slot.recipeId);
+  const wrap = document.createElement('div');
+  wrap.className = `meal-slot${slot ? ' has-meal' : ''}`;
 
+  const main = document.createElement('button');
+  main.type = 'button';
+  main.className = 'meal-slot-main';
+  const status = slot?.status === 'suggested'
+    ? '<span class="status-pill status-suggested">Suggested</span>'
+    : slot ? '<span class="status-pill status-confirmed">Confirmed</span>' : '';
+  main.innerHTML = `
+    <span class="meal-slot-label">${mealLabel(meal)}</span>
+    ${recipe
+      ? `<span class="meal-name">${escapeHtml(recipe.name)}</span><span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : ''}</span>${status}`
+      : '<span class="empty-meal">Choose meal</span>'}
+  `;
+  main.addEventListener('click', () => {
+    if (recipe) openRecipeView(recipe);
+    else openSlot(date, meal);
+  });
+  wrap.appendChild(main);
+
+  if (recipe) {
+    const change = document.createElement('button');
+    change.type = 'button';
+    change.className = 'meal-slot-change';
+    change.textContent = 'Change';
+    change.addEventListener('click', () => openSlot(date, meal));
+    wrap.appendChild(change);
+  }
+  return wrap;
+}
+
+function renderWeek() {
+  els.weekTitle.textContent = fmtWeekTitle(weekStart);
   els.weekGrid.innerHTML = '';
 
   for (let i = 0; i < 7; i++) {
-    const date =
-      addDays(weekStart, i);
-
-    const slot =
-      scheduleFor(date);
-
-    const recipe =
-      slot &&
-      recipeById(slot.recipeId);
-
-    const card =
-      document.createElement('button');
-
-    card.type = 'button';
-
-    card.className =
-      `day-card${
-        sameDate(date, new Date())
-          ? ' today'
-          : ''
-      }`;
-
-    const status =
-      slot?.status === 'suggested'
-        ? '<span class="status-pill status-suggested">Suggested</span>'
-        : slot
-          ? '<span class="status-pill status-confirmed">Confirmed</span>'
-          : '';
-
+    const date = addDays(weekStart, i);
+    const card = document.createElement('article');
+    card.className = `day-card${sameDate(date, new Date()) ? ' today' : ''}`;
     card.innerHTML = `
       <div class="day-date">
-        <div class="day-name">
-          ${fmtDay(date)}
-        </div>
-
-        <div class="day-num">
-          ${date.getDate()}
-        </div>
+        <div class="day-name">${fmtDay(date)}</div>
+        <div class="day-num">${date.getDate()}</div>
       </div>
-
-      <div>
-        ${
-          recipe
-            ? `
-              <div class="meal-name">
-                ${escapeHtml(recipe.name)}
-              </div>
-
-              <div class="meal-meta">
-                Dinner
-                ${
-                  recipe.prepTimeMin
-                    ? ` · ${recipe.prepTimeMin} min`
-                    : ''
-                }
-              </div>
-
-              ${status}
-            `
-            : `
-              <div class="empty-meal">
-                Choose dinner
-              </div>
-            `
-        }
-      </div>
-
-      <div aria-hidden="true">
-        ›
-      </div>
+      <div class="day-meals"></div>
     `;
-
-    card.addEventListener(
-      'click',
-      () => openSlot(date)
-    );
-
+    const meals = card.querySelector('.day-meals');
+    meals.appendChild(renderMealSlot(date, 'lunch'));
+    meals.appendChild(renderMealSlot(date, 'dinner'));
     els.weekGrid.appendChild(card);
   }
 }
 
+async function clearVisibleWeek() {
+  const start = iso(weekStart);
+  const end = iso(addDays(weekStart, 6));
+  const visible = schedule.filter(s => s.date >= start && s.date <= end);
+  if (!visible.length) return toast('This week is already empty');
+  const title = fmtWeekTitle(weekStart);
+  if (!confirm(`Remove all ${visible.length} scheduled meal${visible.length === 1 ? '' : 's'} for ${title}?`)) return;
+  await Promise.all(visible.map(s => deleteDoc(doc(db, 'households', householdId, 'schedule', s.id))));
+  toast(`Cleared ${visible.length} meal${visible.length === 1 ? '' : 's'} from this week`);
+}
 
 /* -------------------------------------------------------
    Recipes
 ------------------------------------------------------- */
 
 function renderRecipes() {
-  const q =
-    normalizeText(
-      els.recipeSearch.value
-    );
-
-  const tag =
-    els.tagFilter.value;
-
-  const filtered =
-    recipes.filter(r => {
-      const hay =
-        normalizeText(
-          `${r.name} ${(r.tags || []).join(' ')}`
-        );
-
-      return (
-        (!q || hay.includes(q)) &&
-        (!tag || (r.tags || []).includes(tag))
-      );
-    });
+  const q = normalizeText(els.recipeSearch.value);
+  const tag = els.tagFilter.value;
+  const filtered = recipes.filter(r => {
+    const hay = normalizeText(`${r.name} ${(r.tags || []).join(' ')}`);
+    return (!q || hay.includes(q)) && (!tag || (r.tags || []).includes(tag));
+  });
 
   els.recipeGrid.innerHTML = '';
-
   if (!filtered.length) {
-    els.recipeGrid.innerHTML =
-      `<div class="empty-state">${
-        recipes.length
-          ? 'No recipes match those filters.'
-          : 'Your recipe box is empty. Add the first recipe.'
-      }</div>`;
-
+    els.recipeGrid.innerHTML = `<div class="empty-state">${recipes.length ? 'No recipes match those filters.' : 'Your recipe box is empty. Add the first recipe.'}</div>`;
     return;
   }
 
   filtered.forEach(r => {
-    const card =
-      document.createElement('article');
-
-    card.className =
-      'recipe-card';
-
-    const photo =
-      safePhoto(r.photoUrl || '');
-
-    card.innerHTML = `
-      ${
-        photo
-          ? `
-            <img
-              class="recipe-photo"
-              src="${escapeHtml(photo)}"
-              alt=""
-              loading="lazy"
-            >
-          `
-          : ''
-      }
-
-      <div class="recipe-body">
-        <h3>
-          ${escapeHtml(r.name)}
-        </h3>
-
-        <div class="tags">
-          ${(r.tags || [])
-            .map(
-              t =>
-                `<span class="tag">${escapeHtml(t)}</span>`
-            )
-            .join('')}
-        </div>
-
-        <p class="muted small">
-          ${(r.ingredients || []).length}
-          ingredients
-          ${
-            r.prepTimeMin
-              ? ` · ${r.prepTimeMin} min`
-              : ''
-          }
-        </p>
-
-        <div class="recipe-card-footer">
-          <span class="muted small">
-            ${escapeHtml(
-              (r.instructions || '').slice(
-                0,
-                80
-              )
-            )}
-            ${
-              (r.instructions || '').length > 80
-                ? '…'
-                : ''
-            }
-          </span>
-
-          <button class="secondary">
-            Edit
-          </button>
-        </div>
-      </div>
-    `;
-
-    card
-      .querySelector('button')
-      .addEventListener(
-        'click',
-        () => openRecipe(r)
-      );
-
+    const card = document.createElement('article');
+    card.className = 'recipe-card clickable-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', `View ${r.name}`);
+    const photo = safePhoto(r.photoUrl || '');
+    card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
+      <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
+      <div class="tags">${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+      <p class="muted small">${(r.ingredients||[]).length} ingredients${r.prepTimeMin ? ` · ${r.prepTimeMin} min` : ''}</p>
+      <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
+    card.addEventListener('click', () => openRecipeView(r));
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecipeView(r); } });
+    card.querySelector('.edit-card-button').addEventListener('click', e => { e.stopPropagation(); openRecipe(r); });
     els.recipeGrid.appendChild(card);
   });
 }
-
 
 function renderTagFilter() {
   const current =
@@ -900,7 +797,7 @@ function getWeekSlots(
     s =>
       s.date >= start &&
       s.date <= end &&
-      s.meal === 'dinner' &&
+      ['lunch', 'dinner'].includes(s.meal) &&
       (
         includeSuggested ||
         s.status === 'confirmed'
@@ -1140,6 +1037,52 @@ function addIngredientRow(
   els.ingredientRows.appendChild(row);
 }
 
+function formatIngredientForView(ing) {
+  const qty = ing.quantity === '' || ing.quantity == null ? '' : String(ing.quantity);
+  return [qty, ing.unit || '', ing.name || ''].filter(Boolean).join(' ').trim();
+}
+
+function openRecipeView(recipe) {
+  if (!recipe) return;
+  viewedRecipeId = recipe.id;
+  els.recipeViewName.textContent = recipe.name || 'Recipe';
+  const photo = safePhoto(recipe.photoUrl || '');
+  if (photo) {
+    els.recipeViewPhoto.src = photo;
+    els.recipeViewPhoto.hidden = false;
+  } else {
+    els.recipeViewPhoto.removeAttribute('src');
+    els.recipeViewPhoto.hidden = true;
+  }
+  els.recipeViewMeta.textContent = recipe.prepTimeMin ? `${recipe.prepTimeMin} min prep` : '';
+  els.recipeViewTags.innerHTML = (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+
+  const groups = new Map();
+  for (const ing of recipe.ingredients || []) {
+    const group = ing.group || '';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(ing);
+  }
+  if (!groups.size) {
+    els.recipeViewIngredients.innerHTML = '<p class="muted">No ingredients saved.</p>';
+  } else {
+    els.recipeViewIngredients.innerHTML = [...groups.entries()].map(([group, items]) => `
+      ${group ? `<h4>${escapeHtml(group)}</h4>` : ''}
+      <ul>${items.map(ing => `<li>${escapeHtml(formatIngredientForView(ing))}</li>`).join('')}</ul>
+    `).join('');
+  }
+  const instructions = (recipe.instructions || '').trim();
+  els.recipeViewInstructions.textContent = instructions || 'No instructions saved.';
+  els.recipeViewDialog.showModal();
+}
+
+function editViewedRecipe() {
+  const recipe = recipeById(viewedRecipeId);
+  if (!recipe) return;
+  els.recipeViewDialog.close();
+  openRecipe(recipe);
+}
+
 function openRecipe(
   recipe = null
 ) {
@@ -1329,300 +1272,123 @@ async function deleteCurrentRecipe() {
    Meal scheduling
 ------------------------------------------------------- */
 
-function openSlot(date) {
-  currentSlotDate =
-    date;
-
-  els.slotTitle.textContent =
-    date.toLocaleDateString(
-      undefined,
-      {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric'
-      }
-    );
-
+function openSlot(date, meal = 'dinner') {
+  currentSlotDate = date;
+  currentSlotMeal = meal;
+  els.slotMealLabel.textContent = mealLabel(meal);
+  els.slotTitle.textContent = date.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
   els.slotSearch.value = '';
   els.suggestionReason.textContent = '';
-
+  els.removeMeal.hidden = !scheduleFor(date, meal);
   renderSlotRecipes();
-
   els.slotDialog.showModal();
 }
 
-
-function exclusionReason(
-  recipe,
-  date
-) {
-  const dateIso =
-    iso(date);
-
-  const targetDow =
-    date.getDay();
-
-  const cutoff =
-    addDays(
-      date,
-      -(settings.repeatWeeks || 0) * 7
-    );
-
-  const repeatedSameDow =
-    schedule.some(s => {
-      if (
-        s.recipeId !== recipe.id ||
-        s.date === dateIso
-      ) {
-        return false;
-      }
-
-      const d =
-        parseIsoLocal(s.date);
-
-      return (
-        d.getDay() === targetDow &&
-        d < date &&
-        d >= cutoff
-      );
-    });
-
-  if (repeatedSameDow) {
-    return `Used on this weekday in the last ${settings.repeatWeeks} weeks`;
-  }
-
+function exclusionReasonAgainst(recipe, date, scheduleState, meal = currentSlotMeal) {
+  const dateIso = iso(date);
+  const targetDow = date.getDay();
+  const cutoff = addDays(date, -(settings.repeatWeeks || 0) * 7);
+  const repeatedSameDow = scheduleState.some(s => {
+    if (s.recipeId !== recipe.id) return false;
+    if (s.date === dateIso && s.meal === meal) return false;
+    const d = parseIsoLocal(s.date);
+    return d.getDay() === targetDow && d < date && d >= cutoff;
+  });
+  if (repeatedSameDow) return `Used on this weekday in the last ${settings.repeatWeeks} weeks`;
   if (settings.avoidSameWeek) {
-    const ws =
-      startOfWeek(date);
-
-    const we =
-      addDays(ws, 6);
-
-    const inWeek =
-      schedule.some(
-        s =>
-          s.recipeId === recipe.id &&
-          s.date !== dateIso &&
-          s.date >= iso(ws) &&
-          s.date <= iso(we)
-      );
-
-    if (inWeek) {
-      return 'Already scheduled this week';
-    }
+    const ws = startOfWeek(date), we = addDays(ws, 6);
+    const inWeek = scheduleState.some(s =>
+      s.recipeId === recipe.id &&
+      !(s.date === dateIso && s.meal === meal) &&
+      s.date >= iso(ws) && s.date <= iso(we)
+    );
+    if (inWeek) return 'Already scheduled this week';
   }
-
   return '';
 }
 
+function exclusionReason(recipe, date) {
+  return exclusionReasonAgainst(recipe, date, schedule, currentSlotMeal);
+}
 
 function renderSlotRecipes() {
-  const q =
-    normalizeText(
-      els.slotSearch.value
-    );
-
-  const items =
-    recipes.filter(
-      r =>
-        !q ||
-        normalizeText(
-          `${r.name} ${(r.tags || []).join(' ')}`
-        ).includes(q)
-    );
-
-  els.slotRecipeList.innerHTML =
-    items.length
-      ? ''
-      : `
-        <div class="empty-state">
-          No recipes found.
-        </div>
-      `;
-
+  const q = normalizeText(els.slotSearch.value);
+  const items = recipes.filter(r => !q || normalizeText(`${r.name} ${(r.tags||[]).join(' ')}`).includes(q));
+  els.slotRecipeList.innerHTML = items.length ? '' : '<div class="empty-state">No recipes found.</div>';
   items.forEach(r => {
-    const reason =
-      exclusionReason(
-        r,
-        currentSlotDate
-      );
-
-    const btn =
-      document.createElement(
-        'button'
-      );
-
-    btn.type =
-      'button';
-
-    btn.className =
-      `slot-option${
-        reason
-          ? ' disabled'
-          : ''
-      }`;
-
-    btn.innerHTML = `
-      <span>
-        <div class="slot-option-title">
-          ${escapeHtml(r.name)}
-        </div>
-
-        <div class="slot-option-meta">
-          ${
-            reason
-              ? escapeHtml(reason)
-              : `${r.prepTimeMin || 0} min · eligible`
-          }
-        </div>
-      </span>
-
-      <span>
-        Choose
-      </span>
-    `;
-
-    /*
-     * Manual override is always allowed,
-     * even if algorithmically excluded.
-     */
-    btn.addEventListener(
-      'click',
-      () =>
-        assignMeal(
-          r.id,
-          'confirmed'
-        )
-    );
-
-    els.slotRecipeList.appendChild(
-      btn
-    );
+    const reason = exclusionReason(r, currentSlotDate);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `slot-option${reason ? ' disabled' : ''}`;
+    btn.innerHTML = `<span><div class="slot-option-title">${escapeHtml(r.name)}</div><div class="slot-option-meta">${reason ? escapeHtml(reason) : `${r.prepTimeMin||0} min · eligible`}</div></span><span>Choose</span>`;
+    btn.addEventListener('click', () => assignMeal(r.id, 'confirmed'));
+    els.slotRecipeList.appendChild(btn);
   });
 }
 
-
-async function assignMeal(
-  recipeId,
-  status
-) {
-  const slotId =
-    `${iso(currentSlotDate)}_dinner`;
-
-  await setDoc(
-    doc(
-      db,
-      'households',
-      householdId,
-      'schedule',
-      slotId
-    ),
-    {
-      date:
-        iso(currentSlotDate),
-
-      meal:
-        'dinner',
-
-      recipeId,
-
-      status,
-
-      updatedAt:
-        serverTimestamp()
-    },
-    {
-      merge: true
-    }
-  );
-
+async function assignMeal(recipeId, status) {
+  const dateIso = iso(currentSlotDate);
+  const slotId = `${dateIso}_${currentSlotMeal}`;
+  await setDoc(doc(db,'households',householdId,'schedule',slotId), {
+    date: dateIso,
+    meal: currentSlotMeal,
+    recipeId,
+    status,
+    updatedAt: serverTimestamp()
+  }, {merge:true});
   els.slotDialog.close();
-
-  toast(
-    status === 'suggested'
-      ? 'Suggestion added'
-      : 'Dinner confirmed'
-  );
+  toast(status === 'suggested' ? `${mealLabel(currentSlotMeal)} suggestion added` : `${mealLabel(currentSlotMeal)} confirmed`);
 }
-
 
 async function suggestMeal() {
-  if (!recipes.length) {
-    return toast(
-      'Add a recipe first'
-    );
-  }
-
-  const eligible =
-    recipes.filter(
-      r =>
-        !exclusionReason(
-          r,
-          currentSlotDate
-        )
-    );
-
+  if (!recipes.length) return toast('Add a recipe first');
+  const eligible = recipes.filter(r => !exclusionReason(r,currentSlotDate));
   if (!eligible.length) {
-    els.suggestionReason.textContent =
-      'No recipes are eligible under the current anti-repeat settings. Choose one manually to override, or reduce the repeat window in Settings.';
-
-    return toast(
-      'No eligible recipes — manual override is still available'
-    );
+    els.suggestionReason.textContent = 'No recipes are eligible under the current anti-repeat settings. Choose one manually to override, or reduce the repeat window in Settings.';
+    return toast('No eligible recipes — manual override is still available');
   }
-
-  const picked =
-    eligible[
-      Math.floor(
-        Math.random() *
-        eligible.length
-      )
-    ];
-
-  await assignMeal(
-    picked.id,
-    'suggested'
-  );
+  const picked = eligible[Math.floor(Math.random()*eligible.length)];
+  await assignMeal(picked.id,'suggested');
 }
-
 
 async function removeMeal() {
-  const slotId =
-    `${iso(currentSlotDate)}_dinner`;
-
-  await deleteDoc(
-    doc(
-      db,
-      'households',
-      householdId,
-      'schedule',
-      slotId
-    )
-  ).catch(() => {});
-
+  const slotId = `${iso(currentSlotDate)}_${currentSlotMeal}`;
+  await deleteDoc(doc(db,'households',householdId,'schedule',slotId)).catch(()=>{});
   els.slotDialog.close();
-
-  toast('Meal removed');
+  toast(`${mealLabel(currentSlotMeal)} removed`);
 }
-
 
 /* -------------------------------------------------------
    Week planner
 ------------------------------------------------------- */
 
+function selectedPlannerMeals() {
+  const meals = [];
+  if (els.planLunch.checked) meals.push('lunch');
+  if (els.planDinner.checked) meals.push('dinner');
+  return meals;
+}
+
+function dayHasEmptySelectedMeal(date) {
+  const meals = selectedPlannerMeals();
+  return meals.some(meal => !scheduleFor(date, meal));
+}
+
 function renderWeekPlanDays() {
   els.weekPlanDays.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const date = addDays(weekStart, i);
-    const slot = scheduleFor(date);
-    const recipe = slot && recipeById(slot.recipeId);
+    const lunch = scheduleFor(date, 'lunch');
+    const dinner = scheduleFor(date, 'dinner');
+    const lunchRecipe = lunch && recipeById(lunch.recipeId);
+    const dinnerRecipe = dinner && recipeById(dinner.recipeId);
     const label = document.createElement('label');
     label.className = 'week-plan-day';
     label.innerHTML = `
-      <input type="checkbox" data-date="${iso(date)}" ${slot ? '' : 'checked'}>
+      <input type="checkbox" data-date="${iso(date)}" checked>
       <span>
         <strong>${date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
-        <small>${recipe ? escapeHtml(recipe.name) : 'Empty'}</small>
+        <small>Lunch: ${lunchRecipe ? escapeHtml(lunchRecipe.name) : 'Empty'} · Dinner: ${dinnerRecipe ? escapeHtml(dinnerRecipe.name) : 'Empty'}</small>
       </span>
     `;
     els.weekPlanDays.appendChild(label);
@@ -1630,6 +1396,8 @@ function renderWeekPlanDays() {
 }
 
 function openWeekPlanner() {
+  els.planLunch.checked = true;
+  els.planDinner.checked = true;
   renderWeekPlanDays();
   els.replaceExistingWeekMeals.checked = false;
   els.weekPlanReason.textContent = '';
@@ -1640,68 +1408,41 @@ function setWeekPlannerSelection(mode) {
   [...els.weekPlanDays.querySelectorAll('input[type="checkbox"]')].forEach(cb => {
     if (mode === 'all') cb.checked = true;
     if (mode === 'clear') cb.checked = false;
-    if (mode === 'empty') cb.checked = !scheduleFor(parseIsoLocal(cb.dataset.date));
+    if (mode === 'empty') cb.checked = dayHasEmptySelectedMeal(parseIsoLocal(cb.dataset.date));
   });
-}
-
-function exclusionReasonAgainst(recipe, date, scheduleState) {
-  const dateIso = iso(date);
-  const targetDow = date.getDay();
-  const cutoff = addDays(date, -(settings.repeatWeeks || 0) * 7);
-  const repeatedSameDow = scheduleState.some(s => {
-    if (s.recipeId !== recipe.id || s.date === dateIso) return false;
-    const d = parseIsoLocal(s.date);
-    return d.getDay() === targetDow && d < date && d >= cutoff;
-  });
-  if (repeatedSameDow) return `Used on this weekday in the last ${settings.repeatWeeks} weeks`;
-  if (settings.avoidSameWeek) {
-    const ws = startOfWeek(date), we = addDays(ws, 6);
-    const inWeek = scheduleState.some(s => s.recipeId === recipe.id && s.date !== dateIso && s.date >= iso(ws) && s.date <= iso(we));
-    if (inWeek) return 'Already scheduled this week';
-  }
-  return '';
 }
 
 async function suggestWeekDays() {
   if (!recipes.length) return toast('Add a recipe first');
   const selected = [...els.weekPlanDays.querySelectorAll('input[type="checkbox"]:checked')]
-    .map(cb => parseIsoLocal(cb.dataset.date))
-    .sort((a, b) => a - b);
+    .map(cb => parseIsoLocal(cb.dataset.date)).sort((a,b)=>a-b);
   if (!selected.length) return toast('Select at least one day');
+  const meals = selectedPlannerMeals();
+  if (!meals.length) return toast('Select Lunch, Dinner, or both');
 
   const replaceExisting = els.replaceExistingWeekMeals.checked;
-  const workingSchedule = schedule.map(s => ({ ...s }));
-  let added = 0;
-  let skipped = 0;
+  const workingSchedule = schedule.map(s => ({...s}));
+  let added = 0, skipped = 0;
 
   for (const date of selected) {
     const dateIso = iso(date);
-    const current = workingSchedule.find(s => s.date === dateIso && s.meal === 'dinner');
-    if (current && !replaceExisting) {
-      skipped++;
-      continue;
+    for (const meal of meals) {
+      const current = workingSchedule.find(s => s.date === dateIso && s.meal === meal);
+      if (current && !replaceExisting) { skipped++; continue; }
+      const scheduleForEligibility = workingSchedule.filter(s => !(s.date === dateIso && s.meal === meal));
+      const eligible = recipes.filter(r => !exclusionReasonAgainst(r, date, scheduleForEligibility, meal));
+      if (!eligible.length) { skipped++; continue; }
+      const picked = eligible[Math.floor(Math.random() * eligible.length)];
+      const slotId = `${dateIso}_${meal}`;
+      const nextSlot = { date: dateIso, meal, recipeId: picked.id, status: 'suggested' };
+      await setDoc(doc(db,'households',householdId,'schedule',slotId), {...nextSlot, updatedAt:serverTimestamp()}, {merge:true});
+      const idx = workingSchedule.findIndex(s => s.date === dateIso && s.meal === meal);
+      if (idx >= 0) workingSchedule[idx] = {...workingSchedule[idx], ...nextSlot}; else workingSchedule.push(nextSlot);
+      added++;
     }
-
-    const scheduleForEligibility = workingSchedule.filter(s => !(s.date === dateIso && s.meal === 'dinner'));
-    const eligible = recipes.filter(r => !exclusionReasonAgainst(r, date, scheduleForEligibility));
-    if (!eligible.length) {
-      skipped++;
-      continue;
-    }
-
-    const picked = eligible[Math.floor(Math.random() * eligible.length)];
-    const slotId = `${dateIso}_dinner`;
-    const nextSlot = { date: dateIso, meal: 'dinner', recipeId: picked.id, status: 'suggested' };
-    await setDoc(doc(db, 'households', householdId, 'schedule', slotId), { ...nextSlot, updatedAt: serverTimestamp() }, { merge: true });
-
-    const idx = workingSchedule.findIndex(s => s.date === dateIso && s.meal === 'dinner');
-    if (idx >= 0) workingSchedule[idx] = { ...workingSchedule[idx], ...nextSlot };
-    else workingSchedule.push(nextSlot);
-    added++;
   }
-
   els.weekPlanDialog.close();
-  toast(`Suggested ${added} day${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
+  toast(`Suggested ${added} meal${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
 }
 
 /* -------------------------------------------------------
@@ -2035,6 +1776,10 @@ function wireUi() {
   els.importRecipeButton.addEventListener('click', openImportRecipe);
   els.parseRecipeButton.addEventListener('click', parseAndReviewRecipe);
   els.planWeekButton.addEventListener('click', openWeekPlanner);
+  els.clearVisibleWeekButton.addEventListener('click', clearVisibleWeek);
+  els.editViewedRecipe.addEventListener('click', editViewedRecipe);
+  els.planLunch.addEventListener('change', renderWeekPlanDays);
+  els.planDinner.addEventListener('change', renderWeekPlanDays);
   els.selectAllWeekDays.addEventListener('click', () => setWeekPlannerSelection('all'));
   els.selectEmptyWeekDays.addEventListener('click', () => setWeekPlannerSelection('empty'));
   els.clearWeekDays.addEventListener('click', () => setWeekPlannerSelection('clear'));
