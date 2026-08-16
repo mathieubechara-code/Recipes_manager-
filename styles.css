@@ -291,3 +291,18 @@ dialog::backdrop { background: rgba(58,50,41,.35); backdrop-filter: blur(3px); }
   border-style: solid;
 }
 .recipe-classification-row { align-items: end; }
+
+
+/* Today / Day view */
+.today-heading { align-items: flex-start; }
+.today-meals { display: grid; gap: 16px; }
+.today-meal-card { padding: 20px; }
+.today-meal-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.today-meal-label { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: .82rem; color: var(--sage-dark, #52664f); }
+.today-recipe-link { width: 100%; border: 0; background: transparent; padding: 0; text-align: left; display: grid; gap: 4px; color: inherit; cursor: pointer; }
+.today-recipe-name { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(1.45rem, 5vw, 2rem); font-weight: 700; line-height: 1.1; }
+.today-meal-actions { margin-top: 16px; }
+.today-empty { margin: 4px 0 14px; }
+@media (min-width: 760px) {
+  .today-meals { grid-template-columns: 1fr 1fr; }
+}

@@ -4,8 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f0e6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Kitchen Week" />
   <title>Kitchen Week</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="favicon.svg?v=1400" type="image/svg+xml" />
+  <link rel="icon" href="favicon-32.png?v=1400" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1400" sizes="180x180" />
+  <link rel="manifest" href="site.webmanifest?v=1400" />
+  <link rel="stylesheet" href="styles.css?v=1400" />
 </head>
 <body>
   <div id="appShell">
@@ -30,12 +37,29 @@
 
       <section id="mainApp" hidden>
         <nav class="tabs" aria-label="Main navigation">
-          <button class="tab active" data-tab="week">Week</button>
+          <button class="tab active" data-tab="today">Today</button>
+          <button class="tab" data-tab="week">Week</button>
           <button class="tab" data-tab="recipes">Recipes</button>
           <button class="tab" data-tab="shopping">Shopping</button>
         </nav>
 
-        <section id="weekTab" class="tab-panel active">
+        <section id="todayTab" class="tab-panel active">
+          <div class="section-heading today-heading">
+            <div>
+              <p class="eyebrow">Day view</p>
+              <h2 id="todayTitle">Today</h2>
+              <p id="todayDate" class="muted"></p>
+            </div>
+            <div class="week-nav">
+              <button id="prevDay" class="secondary" aria-label="Previous day">←</button>
+              <button id="todayDay" class="secondary">Today</button>
+              <button id="nextDay" class="secondary" aria-label="Next day">→</button>
+            </div>
+          </div>
+          <div id="todayMeals" class="today-meals"></div>
+        </section>
+
+        <section id="weekTab" class="tab-panel">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Meal calendar</p>
@@ -292,6 +316,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1311"></script>
+  <script type="module" src="app.js?v=1400"></script>
 </body>
 </html>

@@ -51,6 +51,8 @@ let settings = {
 };
 
 let weekStart = startOfWeek(new Date());
+let selectedDay = new Date();
+selectedDay.setHours(0, 0, 0, 0);
 let currentSlotDate = null;
 let currentSlotMeal = 'dinner';
 let viewedRecipeId = null;
@@ -638,6 +640,7 @@ function renderAll() {
     return;
   }
 
+  renderToday();
   renderWeek();
   renderRecipes();
   renderShopping();
@@ -673,6 +676,56 @@ function recipeSupportsMeal(recipe, meal) {
 
 function mealLabel(meal) {
   return meal === 'lunch' ? 'Lunch' : 'Dinner';
+}
+
+/* -------------------------------------------------------
+   Today / Day view
+------------------------------------------------------- */
+
+function renderTodayMeal(date, meal) {
+  const slot = scheduleFor(date, meal);
+  const recipe = slot && recipeById(slot.recipeId);
+  const card = document.createElement('article');
+  card.className = `card today-meal-card${slot ? ' has-meal' : ''}`;
+
+  const status = slot?.status === 'suggested'
+    ? '<span class="status-pill status-suggested">Suggested</span>'
+    : slot ? '<span class="status-pill status-confirmed">Confirmed</span>' : '';
+
+  card.innerHTML = `
+    <div class="today-meal-topline">
+      <span class="today-meal-label">${mealLabel(meal)}</span>
+      ${status}
+    </div>
+    ${recipe
+      ? `<button type="button" class="today-recipe-link"><span class="today-recipe-name">${escapeHtml(recipe.name)}</span><span class="muted small">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min` : 'View recipe'}</span></button>
+         <div class="button-row today-meal-actions"><button type="button" class="secondary today-change-meal">Change</button><button type="button" class="secondary today-remove-meal">Remove</button></div>`
+      : `<div class="empty-state today-empty">No ${mealLabel(meal).toLowerCase()} scheduled.</div><button type="button" class="primary today-add-meal">Choose ${mealLabel(meal).toLowerCase()}</button>`}
+  `;
+
+  if (recipe) {
+    card.querySelector('.today-recipe-link').addEventListener('click', () => openRecipeView(recipe));
+    card.querySelector('.today-change-meal').addEventListener('click', () => openSlot(date, meal));
+    card.querySelector('.today-remove-meal').addEventListener('click', async () => {
+      const slotId = `${iso(date)}_${meal}`;
+      await deleteDoc(doc(db, 'households', householdId, 'schedule', slotId)).catch(() => {});
+      toast(`${mealLabel(meal)} removed`);
+    });
+  } else {
+    card.querySelector('.today-add-meal').addEventListener('click', () => openSlot(date, meal));
+  }
+
+  return card;
+}
+
+function renderToday() {
+  if (!els.todayMeals) return;
+  const isToday = sameDate(selectedDay, new Date());
+  els.todayTitle.textContent = isToday ? 'Today' : selectedDay.toLocaleDateString(undefined, { weekday: 'long' });
+  els.todayDate.textContent = selectedDay.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  els.todayMeals.innerHTML = '';
+  els.todayMeals.appendChild(renderTodayMeal(selectedDay, 'lunch'));
+  els.todayMeals.appendChild(renderTodayMeal(selectedDay, 'dinner'));
 }
 
 /* -------------------------------------------------------
@@ -1759,6 +1812,22 @@ function wireUi() {
         }
       )
     );
+
+  els.prevDay.addEventListener('click', () => {
+    selectedDay = addDays(selectedDay, -1);
+    renderToday();
+  });
+
+  els.nextDay.addEventListener('click', () => {
+    selectedDay = addDays(selectedDay, 1);
+    renderToday();
+  });
+
+  els.todayDay.addEventListener('click', () => {
+    selectedDay = new Date();
+    selectedDay.setHours(0, 0, 0, 0);
+    renderToday();
+  });
 
   document
     .querySelectorAll('.close-dialog')
