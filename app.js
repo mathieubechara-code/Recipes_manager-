@@ -1147,6 +1147,9 @@ function canonicalIngredientName(name = '') {
     [/^(olive oil|extra virgin olive oil|evoo)(\b|$)/, 'Olive oil'],
     [/^(neutral oil|vegetable oil|canola oil)(\b|$)/, 'Neutral oil'],
     [/^(rice vinegar|rice wine vinegar)(\b|$)/, 'Rice vinegar'],
+    [/^(lemon juice|lemon juice or lime(?: juice)?|lime juice or lemon(?: juice)?|lemon\/lime juice)(\b|$)/, 'Lemon / lime juice'],
+    [/^(lemon|lemons)(\b|$)/, 'Lemon'],
+    [/^(lime|limes)(\b|$)/, 'Lime'],
     [/^(salmon fillet|salmon fillets|salmon filet|salmon filets)(\b|$)/, 'Salmon fillet'],
     [/^(salmon)(\b|$)/, 'Salmon'],
     [/^(pasta|dry pasta)(\b|$)/, 'Pasta'],
@@ -1173,10 +1176,17 @@ function shoppingIngredientIdentity(name = '', unit = '') {
   if (!normalizedUnit) {
     const countable = new Set([
       'Onion', 'Red onion', 'Bell pepper', 'Chicken breast', 'Chicken thigh',
-      'Salmon fillet', 'Mushrooms'
+      'Salmon fillet', 'Mushrooms', 'Lemon', 'Lime'
     ]);
     if (countable.has(canonicalName)) normalizedUnit = 'piece';
     if (canonicalName === 'Garlic' && /\bcloves?\b/.test(rawName)) normalizedUnit = 'clove';
+  }
+
+  // Juice is a liquid/amount, never a countable "piece". Some imported Notes
+  // recipes can accidentally assign piece/pc to a juice line; strip that unit
+  // rather than displaying nonsense such as "Lemon juice — 1 piece".
+  if (canonicalName === 'Lemon / lime juice' && normalizedUnit === 'piece') {
+    normalizedUnit = '';
   }
 
   // "garlic clove" in the name and "clove" in the unit are equivalent.
