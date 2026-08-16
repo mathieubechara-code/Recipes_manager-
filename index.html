@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f0e6" />
+  <title>Kitchen Week</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="appShell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Shared meal planning</p>
+        <h1>Kitchen Week</h1>
+      </div>
+      <button id="settingsButton" class="icon-button" aria-label="Open settings">⚙︎</button>
+    </header>
+
+    <main>
+      <section id="connectPanel" class="card connect-card">
+        <h2>Connect your kitchen</h2>
+        <p>Enter the same household phrase on both iPhones. It stays on-device; only a hash is used as the shared data key.</p>
+        <label>Household phrase
+          <input id="householdPhrase" type="password" autocomplete="current-password" placeholder="e.g. rosemary-table-27" />
+        </label>
+        <button id="connectButton" class="primary">Connect</button>
+        <p id="connectStatus" class="muted small"></p>
+      </section>
+
+      <section id="mainApp" hidden>
+        <nav class="tabs" aria-label="Main navigation">
+          <button class="tab active" data-tab="week">Week</button>
+          <button class="tab" data-tab="recipes">Recipes</button>
+          <button class="tab" data-tab="shopping">Shopping</button>
+        </nav>
+
+        <section id="weekTab" class="tab-panel active">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Meal calendar</p>
+              <h2 id="weekTitle">This week</h2>
+            </div>
+            <div class="week-nav">
+              <button id="prevWeek" class="secondary" aria-label="Previous week">←</button>
+              <button id="todayWeek" class="secondary">Today</button>
+              <button id="nextWeek" class="secondary" aria-label="Next week">→</button>
+            </div>
+          </div>
+          <div id="weekGrid" class="week-grid"></div>
+        </section>
+
+        <section id="recipesTab" class="tab-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Recipe box</p>
+              <h2>Recipes</h2>
+            </div>
+            <button id="addRecipeButton" class="primary">+ Add</button>
+          </div>
+          <div class="filters card">
+            <input id="recipeSearch" type="search" placeholder="Search recipes or tags" />
+            <select id="tagFilter"><option value="">All tags</option></select>
+          </div>
+          <div id="recipeGrid" class="recipe-grid"></div>
+        </section>
+
+        <section id="shoppingTab" class="tab-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">This week</p>
+              <h2>Shopping list</h2>
+            </div>
+          </div>
+          <div class="card shopping-actions">
+            <p class="muted">Ingredients are merged by normalized name + unit across all confirmed and suggested meals in the visible week.</p>
+            <div class="button-row">
+              <button id="copyShopping" class="secondary">Copy list</button>
+              <button id="runShortcut" class="primary">Send to Reminders</button>
+            </div>
+          </div>
+          <div id="shoppingList" class="shopping-list"></div>
+          <details class="card export-details">
+            <summary>Export JSON</summary>
+            <pre id="shoppingJson"></pre>
+          </details>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="recipeDialog">
+    <form id="recipeForm" method="dialog" class="dialog-form">
+      <div class="dialog-title-row">
+        <h2 id="recipeDialogTitle">Add recipe</h2>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <input id="recipeId" type="hidden" />
+      <label>Name<input id="recipeName" required /></label>
+      <div class="two-col">
+        <label>Prep time (min)<input id="prepTime" type="number" min="0" step="1" /></label>
+        <label>Photo URL<input id="photoUrl" type="url" placeholder="https://…" /></label>
+      </div>
+      <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
+      <div>
+        <div class="inline-heading"><strong>Ingredients</strong><button id="addIngredient" type="button" class="text-button">+ ingredient</button></div>
+        <div id="ingredientRows" class="ingredient-rows"></div>
+      </div>
+      <label>Instructions<textarea id="instructions" rows="7" placeholder="Write the method here…"></textarea></label>
+      <div class="dialog-actions">
+        <button id="deleteRecipe" type="button" class="danger" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="slotDialog">
+    <form method="dialog" class="dialog-form">
+      <div class="dialog-title-row">
+        <div><p class="eyebrow">Dinner</p><h2 id="slotTitle">Choose meal</h2></div>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <input id="slotSearch" type="search" placeholder="Find a recipe" />
+      <div id="slotRecipeList" class="slot-recipe-list"></div>
+      <div class="dialog-actions wrap">
+        <button id="suggestMeal" type="button" class="primary">Suggest for me</button>
+        <button id="removeMeal" type="button" class="secondary">Remove meal</button>
+      </div>
+      <p id="suggestionReason" class="muted small"></p>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog">
+    <form id="settingsForm" method="dialog" class="dialog-form">
+      <div class="dialog-title-row">
+        <h2>Settings</h2>
+        <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <label>Anti-repeat window (weeks)<input id="repeatWeeks" type="number" min="0" max="52" step="1" value="4" /></label>
+      <label class="checkbox-row"><input id="avoidSameWeek" type="checkbox" checked /> Avoid any recipe already scheduled in the same week</label>
+      <label>Apple Shortcut name<input id="shortcutName" value="Kitchen Week to Reminders" /></label>
+      <p class="muted small">Both phones should create a Shortcut with this exact name. The app copies a newline list to the clipboard, then launches the Shortcut with clipboard input.</p>
+      <div class="dialog-actions">
+        <button id="disconnectButton" type="button" class="danger">Disconnect</button>
+        <span class="spacer"></span>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

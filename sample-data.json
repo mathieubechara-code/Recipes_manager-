@@ -1,0 +1,20 @@
+{
+  "recipes": [
+    {
+      "id": "sample-bolognese",
+      "name": "Pasta alla Bolognese",
+      "tags": ["italian", "meat", "pasta"],
+      "prepTimeMin": 45,
+      "photoUrl": "",
+      "ingredients": [
+        { "name": "ground beef", "quantity": 500, "unit": "g" },
+        { "name": "tomato passata", "quantity": 700, "unit": "ml" },
+        { "name": "onion", "quantity": 1, "unit": "" }
+      ],
+      "instructions": "Brown the beef, soften the onion, add passata, simmer, and serve with pasta."
+    }
+  ],
+  "schedule": [
+    { "date": "2026-08-17", "meal": "dinner", "recipeId": "sample-bolognese", "status": "confirmed" }
+  ]
+}
