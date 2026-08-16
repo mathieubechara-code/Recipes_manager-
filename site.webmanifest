@@ -1,6 +1,6 @@
 {
-  "name": "Kitchen Week",
-  "short_name": "Kitchen Week",
+  "name": "Meal Planner",
+  "short_name": "Meal Planner",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f6f0e6",

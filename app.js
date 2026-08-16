@@ -1715,7 +1715,7 @@ async function readRestoreFile(ev) {
   try {
     const data = JSON.parse(await file.text());
     if (data.schema !== 'kitchen-week.recipes.v1' || !Array.isArray(data.recipes)) {
-      throw new Error('This is not a Kitchen Week recipe backup.');
+      throw new Error('This is not a Meal Planner recipe backup.');
     }
     pendingRestoreBackup = data;
     els.restoreSummary.textContent = `${data.recipes.length} recipes found in backup${data.exportedAt ? ` from ${new Date(data.exportedAt).toLocaleString()}` : ''}.`;
@@ -1965,7 +1965,18 @@ function wireUi() {
   });
 
   els.todayDay.addEventListener('click', () => {
-    selectedDay = new Date();
+    els.todayDatePicker.value = iso(selectedDay);
+    try {
+      if (typeof els.todayDatePicker.showPicker === 'function') els.todayDatePicker.showPicker();
+      else els.todayDatePicker.click();
+    } catch {
+      els.todayDatePicker.click();
+    }
+  });
+
+  els.todayDatePicker.addEventListener('change', () => {
+    if (!els.todayDatePicker.value) return;
+    selectedDay = parseIsoLocal(els.todayDatePicker.value);
     selectedDay.setHours(0, 0, 0, 0);
     renderToday();
   });

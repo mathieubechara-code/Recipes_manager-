@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#f6f0e6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Kitchen Week" />
-  <title>Kitchen Week</title>
-  <link rel="icon" href="favicon.svg?v=1601" type="image/svg+xml" />
-  <link rel="icon" href="favicon-32.png?v=1601" type="image/png" sizes="32x32" />
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1601" sizes="180x180" />
-  <link rel="manifest" href="site.webmanifest?v=1601" />
-  <link rel="stylesheet" href="styles.css?v=1601" />
+  <meta name="apple-mobile-web-app-title" content="Meal Planner" />
+  <title>Meal Planner</title>
+  <link rel="icon" href="favicon.svg?v=1610" type="image/svg+xml" />
+  <link rel="icon" href="favicon-32.png?v=1610" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1610" sizes="180x180" />
+  <link rel="manifest" href="site.webmanifest?v=1610" />
+  <link rel="stylesheet" href="styles.css?v=1610" />
 </head>
 <body>
   <div id="appShell">
     <header class="topbar mockup-topbar">
       <div class="brand-lockup">
-        <img class="brand-icon" src="favicon.svg?v=1601" alt="" />
+        <img class="brand-icon" src="favicon.svg?v=1610" alt="" />
         <div class="brand-copy">
-          <h1>Kitchen Week</h1>
+          <h1>Meal Planner</h1>
           <p class="eyebrow">Shared meal planning</p>
         </div>
       </div>
@@ -43,9 +43,9 @@
 
       <section id="mainApp" hidden>
         <nav class="tabs mockup-tabs" aria-label="Main navigation">
-          <button class="tab active" data-tab="today"><span class="tab-label">Today</span></button>
-          <button class="tab" data-tab="week"><span class="tab-icon" aria-hidden="true">▦</span><span class="tab-label">Week</span></button>
-          <button class="tab" data-tab="recipes"><span class="tab-icon" aria-hidden="true">▤</span><span class="tab-label">Recipes</span></button>
+          <button class="tab active" data-tab="today"><span class="tab-icon" aria-hidden="true">☀</span><span class="tab-label">Today</span></button>
+          <button class="tab" data-tab="week"><span class="tab-icon" aria-hidden="true">🗓</span><span class="tab-label">Week</span></button>
+          <button class="tab" data-tab="recipes"><span class="tab-icon" aria-hidden="true">📖</span><span class="tab-label">Recipes</span></button>
           <button class="tab" data-tab="shopping"><span class="tab-icon" aria-hidden="true">🛒</span><span class="tab-label">Shopping</span></button>
         </nav>
 
@@ -53,11 +53,12 @@
           <div class="today-date-block">
             <div class="today-date-nav">
               <button id="prevDay" class="date-arrow" aria-label="Previous day">←</button>
-              <button id="todayDay" class="date-center" type="button">
+              <button id="todayDay" class="date-center" type="button" aria-label="Choose a date">
                 <span class="date-calendar" aria-hidden="true">▦</span>
                 <span id="todayTitle">Today</span>
                 <span class="date-chevron" aria-hidden="true">⌄</span>
               </button>
+              <input id="todayDatePicker" class="native-date-picker" type="date" aria-label="Choose date" />
               <button id="nextDay" class="date-arrow" aria-label="Next day">→</button>
             </div>
             <p id="todayDate" class="today-date-text"></p>
@@ -119,7 +120,7 @@
           <div class="card backup-card">
             <div>
               <strong>Recipe backup</strong>
-              <p class="muted small">Download all recipes as JSON, or restore a previous Kitchen Week recipe backup.</p>
+              <p class="muted small">Download all recipes as JSON, or restore a previous Meal Planner recipe backup.</p>
             </div>
             <div class="button-row">
               <button id="downloadRecipeBackup" class="secondary">Download JSON</button>
@@ -354,6 +355,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1601"></script>
+  <script type="module" src="app.js?v=1610"></script>
 </body>
 </html>

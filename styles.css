@@ -707,3 +707,76 @@ main { padding-top: 8px; }
   .mockup-tabs .tab { font-size: .7rem; }
   .today-meal-actions { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+
+/* V1.6 refinement — Meal Planner branding, usable date picker, compact Today cards */
+.brand-copy h1 {
+  white-space: nowrap;
+  letter-spacing: -.025em;
+}
+
+.today-date-nav { position: relative; }
+.native-date-picker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: 50%;
+  top: 50%;
+}
+
+/* Keep all four primary nav destinations on one row. */
+.mockup-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  white-space: nowrap;
+}
+.mockup-tabs .tab { min-width: 0; }
+.mockup-tabs .tab-icon { font-size: 1.08rem; }
+
+/* Today cards: same approved hierarchy, with less vertical bulk. */
+.today-meals { gap: 16px; }
+.today-meal-card { padding: 17px 20px 18px; }
+.today-meal-topline { margin-bottom: 15px; }
+.today-meal-icon { width: 40px; height: 40px; font-size: 1.22rem; }
+.today-meal-kind { gap: 10px; }
+.today-recipe-link { gap: 6px; }
+.today-recipe-name { font-size: clamp(1.55rem, 5.4vw, 2.05rem); }
+.recipe-tap-hint { font-size: .87rem; }
+.today-meal-meta { margin-top: 6px; }
+.today-meal-divider { margin: 15px 0 11px; }
+.today-meal-actions { gap: 7px; }
+.meal-action { min-height: 46px; padding: 6px 5px; gap: 5px; font-size: .70rem; border-radius: 12px; }
+.meal-action > span:first-child { font-size: 1.02rem; }
+
+@media (max-width: 620px) {
+  .brand-lockup { gap: 9px; flex: 1 1 auto; }
+  .brand-icon { width: 40px; height: 40px; flex-basis: 40px; }
+  .brand-copy h1 { font-size: 1.42rem; white-space: nowrap; }
+  .brand-copy .eyebrow { font-size: .52rem; letter-spacing: .12em; }
+  .topbar-actions { gap: 5px; }
+  .how-to-button { min-height: 40px; padding: 0 9px; font-size: .72rem; }
+  .settings-square { width: 40px; height: 40px; }
+  .mockup-tabs { height: 58px; margin-bottom: 22px; }
+  .mockup-tabs .tab { font-size: .70rem; gap: 3px; padding-inline: 1px; }
+  .mockup-tabs .tab-icon { font-size: .88rem; }
+  .today-date-block { gap: 10px; margin-bottom: 22px; }
+  .today-meal-card { padding: 15px 16px 16px; }
+  .today-meal-topline { margin-bottom: 12px; }
+  .today-meal-icon { width: 36px; height: 36px; font-size: 1.08rem; }
+  .today-recipe-name { font-size: 1.52rem; }
+  .today-meal-divider { margin: 13px 0 10px; }
+  .meal-action { min-height: 44px; font-size: .60rem; }
+}
+
+@media (max-width: 390px) {
+  .mockup-topbar { gap: 8px; }
+  .brand-copy h1 { font-size: 1.28rem; }
+  .how-to-button { padding: 0 7px; font-size: .66rem; }
+  .mockup-tabs .tab { font-size: .65rem; }
+  .mockup-tabs .tab-icon { font-size: .82rem; }
+  /* Preserve the approved four-action row even on small iPhones. */
+  .today-meal-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .meal-action { min-width: 0; padding-inline: 2px; font-size: .56rem; gap: 3px; }
+  .meal-action > span:first-child { font-size: .88rem; }
+}
