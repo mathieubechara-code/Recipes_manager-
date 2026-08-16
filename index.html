@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1627" />
+  <link rel="stylesheet" href="styles.css?v=1628" />
 </head>
 <body>
   <div id="appShell">
@@ -114,8 +114,12 @@
             </div>
           </div>
 
-          <div class="filters card">
+          <div class="filters card recipe-filters">
             <input id="recipeSearch" type="search" placeholder="Search recipes or tags" />
+            <label class="recipe-time-filter" for="recipeTimeFilter">
+              <span class="recipe-time-filter-head"><span>⏱ Max time</span><output id="recipeTimeFilterValue" for="recipeTimeFilter">30 min</output></span>
+              <input id="recipeTimeFilter" class="timing-slider" type="range" min="1" max="30" step="1" value="30" />
+            </label>
             <select id="tagFilter"><option value="">All tags</option></select>
           </div>
 
@@ -413,6 +417,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1627"></script>
+  <script type="module" src="app.js?v=1628"></script>
 </body>
 </html>

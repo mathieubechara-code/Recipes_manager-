@@ -990,9 +990,13 @@ async function clearVisibleWeek() {
 function renderRecipes() {
   const q = normalizeText(els.recipeSearch.value);
   const tag = els.tagFilter.value;
+  const maxTime = Number(els.recipeTimeFilter?.value || 30);
   const filtered = recipes.filter(r => {
     const hay = normalizeText(`${r.name} ${(r.tags || []).join(' ')}`);
-    return (!q || hay.includes(q)) && (!tag || (r.tags || []).includes(tag));
+    const recipeTime = Math.min(30, Math.max(1, Number(r.prepTimeMin) || 15));
+    return (!q || hay.includes(q))
+      && (!tag || (r.tags || []).includes(tag))
+      && recipeTime <= maxTime;
   });
 
   els.recipeGrid.innerHTML = '';
@@ -2746,6 +2750,18 @@ function wireUi() {
     'input',
     renderRecipes
   );
+
+  const updateRecipeTimeFilter = () => {
+    if (els.recipeTimeFilterValue && els.recipeTimeFilter) {
+      els.recipeTimeFilterValue.textContent = `${els.recipeTimeFilter.value} min`;
+    }
+    renderRecipes();
+  };
+  els.recipeTimeFilter?.addEventListener('input', updateRecipeTimeFilter);
+  els.recipeTimeFilter?.addEventListener('change', updateRecipeTimeFilter);
+  if (els.recipeTimeFilterValue && els.recipeTimeFilter) {
+    els.recipeTimeFilterValue.textContent = `${els.recipeTimeFilter.value} min`;
+  }
 
   els.tagFilter.addEventListener(
     'change',

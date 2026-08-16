@@ -1256,3 +1256,13 @@ main { padding-top: 8px; }
   font-weight: 850;
   white-space: nowrap;
 }
+
+
+/* V1.6 recipe list time filter */
+.recipe-filters { align-items: center; }
+.recipe-time-filter { margin: 0; display: grid; gap: 7px; min-width: 190px; padding: 2px 4px; }
+.recipe-time-filter-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .78rem; font-weight: 800; color: var(--ink); }
+.recipe-time-filter-head output { color: var(--sage-dark); white-space: nowrap; }
+.recipe-time-filter .timing-slider { margin: 0; padding: 0; min-height: 28px; }
+@media (min-width: 700px) { .filters.recipe-filters { grid-template-columns: minmax(250px, 1fr) minmax(210px, .7fr) 210px; } }
+@media (max-width: 699px) { .filters.recipe-filters { grid-template-columns: 1fr; } .recipe-time-filter { min-width: 0; } }
