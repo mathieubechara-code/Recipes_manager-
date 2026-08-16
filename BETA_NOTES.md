@@ -13,3 +13,14 @@ Stabilization beta built from the V1.6 / cache 1630 baseline.
 
 ## Compatibility
 No Firestore migration is required. Do not replace `firebase-config.js` or `firestore.rules`. Existing household hashes, recipe documents, schedule documents, backups, and App Check remain compatible.
+
+
+## Beta 2 changes
+
+- Added three weekly generation patterns: daily variety, 2-day batches (A A / B B / C C / D), and 3-meal 2/2/3 batching.
+- Added optional dinner-repeat mode. Dinner repetition may relax dinner anti-repeat constraints, but repeated dinners are kept in consecutive blocks; a single eligible dinner can fill the week.
+- Locked meals are always preserved by the weekly planner.
+- Shopping Review now has a floating Merge control and compact icon-only remove action.
+- Shopping Review drafts auto-save locally per household/week and also have an explicit Save draft button.
+- Reopening Review resumes the saved draft and reconciles it with the current week's generated ingredients: new ingredients are added, removed schedule ingredients disappear, ignored/manual naming is preserved, and quantities refresh unless the user manually edited the quantity.
+- Sending the reviewed list to Reminders clears that week's saved draft.

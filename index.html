@@ -13,7 +13,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1700b1" />
+  <link rel="stylesheet" href="styles.css?v=1700b2" />
 </head>
 <body>
   <div id="appShell">
@@ -304,13 +304,23 @@
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
       <p class="muted small">Choose Lunch week, Dinner week, or a full Lunch &amp; Dinner week, then choose the days Meal Planner should suggest. Suggestions follow your anti-repeat settings and remain unconfirmed until you replace or confirm them.</p>
-      <label>Plan
-        <select id="weekPlanScope">
-          <option value="full">Full week — Lunch &amp; Dinner</option>
-          <option value="lunch">Lunch week only</option>
-          <option value="dinner">Dinner week only</option>
-        </select>
-      </label>
+      <div class="planner-options-grid">
+        <label>Plan
+          <select id="weekPlanScope">
+            <option value="full">Full week — Lunch &amp; Dinner</option>
+            <option value="lunch">Lunch week only</option>
+            <option value="dinner">Dinner week only</option>
+          </select>
+        </label>
+        <label>Generation style
+          <select id="weekPlanPattern">
+            <option value="daily">Daily variety — one meal each day</option>
+            <option value="pairs">2-day batches — A A · B B · C C · D</option>
+            <option value="223">3 meals — A A · B B · C C C</option>
+          </select>
+        </label>
+      </div>
+      <label class="checkbox-row planner-repeat-option"><input id="allowDinnerRepeats" type="checkbox" /> Dinner repeats are OK — keep repeats consecutive</label>
       <div class="button-row preset-row">
         <button id="selectAllWeekDays" type="button" class="secondary">Select all</button>
         <button id="selectEmptyWeekDays" type="button" class="secondary">Select empty days</button>
@@ -380,16 +390,18 @@
         <div><p class="eyebrow">Before Reminders</p><h2>Review shopping list</h2></div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Edit the ingredient or quantity, ignore items you already have, or select two or more rows and merge them. These edits apply to this send only.</p>
-      <div class="shopping-review-toolbar">
-        <button id="mergeSelectedShopping" type="button" class="secondary" disabled>Merge selected</button>
-        <span id="shoppingMergeSelectionCount" class="muted small">Select 2+ items to merge</span>
-      </div>
+      <p class="muted small">Edit names or quantities, ignore what you already have, and select rows to merge.</p>
+      <div class="shopping-draft-line"><span id="shoppingDraftStatus" class="muted small">Autosaves while you review</span></div>
       <div id="shoppingReviewList" class="shopping-review-list"></div>
-      <div class="dialog-actions wrap">
+      <div class="shopping-review-floating" aria-live="polite">
+        <span id="shoppingMergeSelectionCount" class="small">Select 2+ items</span>
+        <button id="mergeSelectedShopping" type="button" class="primary" disabled>Merge selected</button>
+      </div>
+      <div class="dialog-actions wrap shopping-review-actions">
+        <button id="saveShoppingDraft" type="button" class="secondary">Save draft</button>
         <button id="copyReviewedShopping" type="button" class="secondary">Copy reviewed</button>
         <span class="spacer"></span>
-        <button type="button" class="secondary close-dialog">Cancel</button>
+        <button type="button" class="secondary close-dialog">Close</button>
         <button id="sendReviewedShopping" type="button" class="primary">Send to Reminders</button>
       </div>
     </div>
@@ -415,6 +427,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1700b1"></script>
+  <script type="module" src="app.js?v=1700b2"></script>
 </body>
 </html>

@@ -25,7 +25,7 @@ import {
 
 import { firebaseConfig } from './firebase-config.js';
 
-const APP_BUILD = '1.7.0-beta.1';
+const APP_BUILD = '1.7.0-beta.2';
 
 
 const els = Object.fromEntries(
@@ -66,6 +66,8 @@ let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
 let shoppingReviewSource = [];
+let shoppingReviewRemovedKeys = new Set();
+let shoppingReviewAutosaveTimer = null;
 let recipeEditorServings = 2;
 let slotPeopleSaveTimer = null;
 
@@ -1453,33 +1455,170 @@ function renderShopping() {
   els.shoppingJson.textContent = JSON.stringify(shoppingPayload(), null, 2);
 }
 
-function openShoppingReview() {
-  shoppingReviewSource = mergedShoppingItems().map(shoppingLine);
-  if (!shoppingReviewSource.length) return toast('Shopping list is empty');
-  els.shoppingReviewList.innerHTML = '';
-  shoppingReviewSource.forEach(line => addShoppingReviewRow(line));
-  els.shoppingReviewDialog.showModal();
+function shoppingDraftStorageKey() {
+  return `mp_shopping_review:${householdId || 'local'}:${iso(weekStart)}`;
 }
 
-function addShoppingReviewRow(text, options = {}) {
-  const parsed = parseShoppingReviewLine(text);
+function shoppingReviewKey(item) {
+  return `ingredient:${normalizeText(item?.name || '')}`;
+}
+
+function currentShoppingReviewSource() {
+  return mergedShoppingItems().map(item => ({
+    key: shoppingReviewKey(item),
+    name: item.name,
+    quantity: formatQty(item)
+  }));
+}
+
+function loadShoppingReviewDraft() {
+  try {
+    const raw = localStorage.getItem(shoppingDraftStorageKey());
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    return draft?.weekStart === iso(weekStart) && Array.isArray(draft.rows) ? draft : null;
+  } catch (err) {
+    console.warn('Could not read shopping draft:', err);
+    return null;
+  }
+}
+
+function serializeShoppingReviewDraft() {
+  const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')].map(row => ({
+    sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]'),
+    name: row.querySelector('.shopping-review-name')?.value.trim() || '',
+    quantity: row.querySelector('.shopping-review-qty')?.value.trim() || '',
+    originalName: row.dataset.originalName || '',
+    originalQuantity: row.dataset.originalQuantity || '',
+    nameEdited: row.dataset.nameEdited === 'true',
+    quantityEdited: row.dataset.quantityEdited === 'true',
+    ignored: row.classList.contains('is-ignored')
+  }));
+  return {
+    schema: 'meal-planner.shopping-review.v1',
+    weekStart: iso(weekStart),
+    savedAt: new Date().toISOString(),
+    rows,
+    removedSourceKeys: [...shoppingReviewRemovedKeys]
+  };
+}
+
+function saveShoppingReviewDraft(showToast = false) {
+  if (!els.shoppingReviewList) return;
+  try {
+    const draft = serializeShoppingReviewDraft();
+    localStorage.setItem(shoppingDraftStorageKey(), JSON.stringify(draft));
+    if (els.shoppingDraftStatus) els.shoppingDraftStatus.textContent = `Saved ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    if (showToast) toast('Shopping review saved');
+  } catch (err) {
+    console.error('Could not save shopping review:', err);
+    if (showToast) toast('Could not save shopping review');
+  }
+}
+
+function scheduleShoppingReviewAutosave() {
+  clearTimeout(shoppingReviewAutosaveTimer);
+  shoppingReviewAutosaveTimer = setTimeout(() => saveShoppingReviewDraft(false), 300);
+}
+
+function clearShoppingReviewDraft() {
+  localStorage.removeItem(shoppingDraftStorageKey());
+  shoppingReviewRemovedKeys = new Set();
+  if (els.shoppingDraftStatus) els.shoppingDraftStatus.textContent = 'No saved draft';
+}
+
+function reconcileShoppingReviewDraft(source, draft) {
+  const sourceMap = new Map(source.map(item => [item.key, item]));
+  const consumed = new Set();
+  shoppingReviewRemovedKeys = new Set((draft?.removedSourceKeys || []).filter(key => sourceMap.has(key)));
+  const rows = [];
+
+  for (const saved of draft?.rows || []) {
+    const sourceKeys = (saved.sourceKeys || []).filter(key => sourceMap.has(key));
+    if (!sourceKeys.length) continue;
+    sourceKeys.forEach(key => consumed.add(key));
+    const currentItems = sourceKeys.map(key => sourceMap.get(key));
+    const currentQuantity = mergeReviewQuantities(currentItems.map(item => item.quantity));
+    const fallbackName = currentItems[0]?.name || saved.name || '';
+    rows.push({
+      sourceKeys,
+      name: saved.nameEdited || sourceKeys.length > 1 ? saved.name : fallbackName,
+      quantity: saved.quantityEdited ? saved.quantity : currentQuantity,
+      originalName: fallbackName,
+      originalQuantity: currentQuantity,
+      nameEdited: !!saved.nameEdited || sourceKeys.length > 1,
+      quantityEdited: !!saved.quantityEdited,
+      ignored: !!saved.ignored
+    });
+  }
+
+  for (const item of source) {
+    if (consumed.has(item.key) || shoppingReviewRemovedKeys.has(item.key)) continue;
+    rows.push({
+      sourceKeys: [item.key],
+      name: item.name,
+      quantity: item.quantity,
+      originalName: item.name,
+      originalQuantity: item.quantity,
+      nameEdited: false,
+      quantityEdited: false,
+      ignored: false
+    });
+  }
+  return rows;
+}
+
+function openShoppingReview() {
+  shoppingReviewSource = currentShoppingReviewSource();
+  if (!shoppingReviewSource.length) return toast('Shopping list is empty');
+  const draft = loadShoppingReviewDraft();
+  const rows = reconcileShoppingReviewDraft(shoppingReviewSource, draft);
+  els.shoppingReviewList.innerHTML = '';
+  rows.forEach(item => addShoppingReviewRow(item));
+  if (els.shoppingDraftStatus) {
+    els.shoppingDraftStatus.textContent = draft ? 'Saved draft resumed and updated from this week' : 'Autosaves while you review';
+  }
+  updateShoppingMergeToolbar();
+  els.shoppingReviewDialog.showModal();
+  if (draft) toast('Saved shopping review resumed');
+}
+
+function addShoppingReviewRow(item, options = {}) {
+  const parsed = typeof item === 'string' ? parseShoppingReviewLine(item) : item;
   const row = document.createElement('div');
   row.className = 'shopping-review-row';
+  const sourceKeys = options.sourceKeys || parsed.sourceKeys || [];
+  row.dataset.sourceKeys = JSON.stringify(sourceKeys);
+  row.dataset.originalName = options.originalName ?? parsed.originalName ?? parsed.name ?? '';
+  row.dataset.originalQuantity = options.originalQuantity ?? parsed.originalQuantity ?? parsed.quantity ?? '';
+  row.dataset.nameEdited = String(options.nameEdited ?? parsed.nameEdited ?? false);
+  row.dataset.quantityEdited = String(options.quantityEdited ?? parsed.quantityEdited ?? false);
   row.innerHTML = `
-    <label class="shopping-review-select" title="Select item for manual merge">
+    <label class="shopping-review-select">
       <input class="shopping-review-checkbox" type="checkbox" aria-label="Select shopping item for merge">
     </label>
     <div class="shopping-review-fields">
-      <input class="shopping-review-name" value="${escapeHtml(parsed.name)}" aria-label="Ingredient name" placeholder="Ingredient">
-      <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity)}" aria-label="Ingredient quantity" placeholder="Quantity">
+      <input class="shopping-review-name" value="${escapeHtml(parsed.name || '')}" aria-label="Ingredient" placeholder="Ingredient">
+      <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity || '')}" aria-label="Quantity" placeholder="Quantity">
     </div>
     <button type="button" class="shopping-review-ignore" aria-pressed="false">Ignore</button>
-    <button type="button" class="shopping-review-remove" aria-label="Remove item">×</button>`;
+    <button type="button" class="shopping-review-remove" aria-label="Remove">×</button>`;
 
   const checkbox = row.querySelector('.shopping-review-checkbox');
   const ignore = row.querySelector('.shopping-review-ignore');
+  const nameInput = row.querySelector('.shopping-review-name');
+  const qtyInput = row.querySelector('.shopping-review-qty');
   checkbox.checked = !!options.selected;
   checkbox.addEventListener('change', updateShoppingMergeToolbar);
+
+  nameInput.addEventListener('input', () => {
+    row.dataset.nameEdited = String(nameInput.value.trim() !== row.dataset.originalName);
+    scheduleShoppingReviewAutosave();
+  });
+  qtyInput.addEventListener('input', () => {
+    row.dataset.quantityEdited = String(qtyInput.value.trim() !== row.dataset.originalQuantity);
+    scheduleShoppingReviewAutosave();
+  });
 
   const setIgnored = ignored => {
     row.classList.toggle('is-ignored', ignored);
@@ -1488,15 +1627,18 @@ function addShoppingReviewRow(text, options = {}) {
     checkbox.checked = false;
     checkbox.disabled = ignored;
     updateShoppingMergeToolbar();
+    scheduleShoppingReviewAutosave();
   };
   ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored')));
   row.querySelector('.shopping-review-remove').addEventListener('click', () => {
+    for (const key of JSON.parse(row.dataset.sourceKeys || '[]')) shoppingReviewRemovedKeys.add(key);
     row.remove();
     updateShoppingMergeToolbar();
+    scheduleShoppingReviewAutosave();
   });
 
   els.shoppingReviewList.appendChild(row);
-  setIgnored(!!options.ignored);
+  setIgnored(!!(options.ignored ?? parsed.ignored));
 }
 
 function selectedShoppingReviewRows() {
@@ -1506,17 +1648,19 @@ function selectedShoppingReviewRows() {
 }
 
 function updateShoppingMergeToolbar() {
-  if (!els.mergeSelectedShopping || !els.shoppingMergeSelectionCount) return;
+  if (!els.mergeSelectedShopping) return;
   const count = selectedShoppingReviewRows().length;
   els.mergeSelectedShopping.disabled = count < 2;
-  els.shoppingMergeSelectionCount.textContent = count < 2
-    ? 'Select 2+ items to merge'
-    : `${count} items selected`;
+  els.mergeSelectedShopping.textContent = count < 2 ? 'Merge selected' : `Merge selected (${count})`;
+  if (els.shoppingMergeSelectionCount) {
+    els.shoppingMergeSelectionCount.textContent = count < 2 ? 'Select 2+ items' : `${count} selected`;
+  }
 }
 
 function parseShoppingReviewLine(line = '') {
   const [namePart, ...qtyParts] = String(line).split(/\s+—\s+/);
   return {
+    sourceKeys: [],
     name: (namePart || '').trim(),
     quantity: qtyParts.join(' — ').trim()
   };
@@ -1566,7 +1710,8 @@ function mergeSelectedShoppingRows() {
   if (rows.length < 2) return;
   const parsed = rows.map(row => ({
     name: row.querySelector('.shopping-review-name')?.value.trim() || '',
-    quantity: row.querySelector('.shopping-review-qty')?.value.trim() || ''
+    quantity: row.querySelector('.shopping-review-qty')?.value.trim() || '',
+    sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]')
   }));
   const suggestedName = parsed[0]?.name || 'Merged item';
   const customName = prompt('Name the merged shopping item:', suggestedName);
@@ -1576,11 +1721,18 @@ function mergeSelectedShoppingRows() {
 
   const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
   const firstRow = rows[0];
+  const sourceKeys = [...new Set(parsed.flatMap(item => item.sourceKeys))];
+  firstRow.dataset.sourceKeys = JSON.stringify(sourceKeys);
+  firstRow.dataset.originalName = name;
+  firstRow.dataset.originalQuantity = mergedQuantity;
+  firstRow.dataset.nameEdited = 'true';
+  firstRow.dataset.quantityEdited = 'false';
   firstRow.querySelector('.shopping-review-name').value = name;
   firstRow.querySelector('.shopping-review-qty').value = mergedQuantity;
   firstRow.querySelector('.shopping-review-checkbox').checked = false;
   rows.slice(1).forEach(row => row.remove());
   updateShoppingMergeToolbar();
+  saveShoppingReviewDraft(false);
   toast(`Merged ${rows.length} items as ${name}`);
 }
 
@@ -1600,6 +1752,7 @@ async function copyReviewedShopping() {
   const text = reviewedShoppingText();
   if (!text) return toast('Shopping list is empty');
   await navigator.clipboard.writeText(text);
+  saveShoppingReviewDraft(false);
   toast('Reviewed shopping list copied');
 }
 
@@ -1607,6 +1760,7 @@ async function sendReviewedShopping() {
   const text = reviewedShoppingText();
   if (!text) return toast('Shopping list is empty');
   await navigator.clipboard.writeText(text);
+  clearShoppingReviewDraft();
   els.shoppingReviewDialog.close();
   const url = `shortcuts://run-shortcut?name=${encodeURIComponent(settings.shortcutName || 'Kitchen Week to Reminders')}&input=clipboard`;
   window.location.href = url;
@@ -2345,6 +2499,14 @@ function selectedPlannerMeals() {
   return ['lunch', 'dinner'];
 }
 
+function plannerPattern() {
+  return els.weekPlanPattern?.value || 'daily';
+}
+
+function dinnerRepeatsAllowed() {
+  return !!els.allowDinnerRepeats?.checked;
+}
+
 function dayHasEmptySelectedMeal(date) {
   const meals = selectedPlannerMeals();
   return meals.some(meal => !scheduleFor(date, meal));
@@ -2373,6 +2535,8 @@ function renderWeekPlanDays() {
 
 function openWeekPlanner() {
   els.weekPlanScope.value = 'full';
+  if (els.weekPlanPattern) els.weekPlanPattern.value = 'daily';
+  if (els.allowDinnerRepeats) els.allowDinnerRepeats.checked = false;
   renderWeekPlanDays();
   els.replaceExistingWeekMeals.checked = false;
   els.weekPlanReason.textContent = '';
@@ -2387,6 +2551,112 @@ function setWeekPlannerSelection(mode) {
   });
 }
 
+function shuffleArray(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function splitConsecutiveDates(dates) {
+  if (!dates.length) return [];
+  const groups = [[dates[0]]];
+  for (let i = 1; i < dates.length; i++) {
+    const prev = dates[i - 1];
+    const current = dates[i];
+    if (Math.round((current - prev) / 86400000) === 1) groups[groups.length - 1].push(current);
+    else groups.push([current]);
+  }
+  return groups;
+}
+
+function patternBlocks(length, mode) {
+  if (length <= 0) return [];
+  if (mode === 'pairs') {
+    const result = [];
+    let left = length;
+    while (left > 0) {
+      const size = Math.min(2, left);
+      result.push(size);
+      left -= size;
+    }
+    return result;
+  }
+  if (mode === '223') {
+    const seed = shuffleArray([2, 2, 3]);
+    const result = [];
+    let left = length;
+    for (const requested of seed) {
+      if (!left) break;
+      const size = Math.min(requested, left);
+      result.push(size);
+      left -= size;
+    }
+    while (left > 0) {
+      const size = Math.min(2, left);
+      result.push(size);
+      left -= size;
+    }
+    return result;
+  }
+  return Array.from({ length }, () => 1);
+}
+
+function balancedRepeatBlocks(dayCount, recipeCount) {
+  if (dayCount <= 0 || recipeCount <= 0) return [];
+  const base = Math.floor(dayCount / recipeCount);
+  let remainder = dayCount % recipeCount;
+  return Array.from({length: recipeCount}, () => base + (remainder-- > 0 ? 1 : 0)).filter(Boolean);
+}
+
+function collapseBlocksToCount(blocks, count) {
+  if (count <= 0) return [];
+  if (count >= blocks.length) return [...blocks];
+  const total = blocks.reduce((sum, n) => sum + n, 0);
+  const balanced = balancedRepeatBlocks(total, count);
+  // Keep every recipe in one contiguous run. The exact pair/2-2-3 pattern is
+  // preserved when enough distinct dinners exist; when the dinner pool is
+  // smaller, adjacent blocks collapse instead of scattering a repeated recipe.
+  return balanced;
+}
+
+function plannerCandidateAllowed(recipe, dates, meal, scheduleState) {
+  if (!recipeSupportsMeal(recipe, meal)) return false;
+  const blockDates = new Set(dates.map(iso));
+  for (const date of dates) {
+    const targetDow = date.getDay();
+    const cutoff = addDays(date, -(settings.repeatWeeks || 0) * 7);
+    const historicalRepeat = scheduleState.some(slot => {
+      if (slot.recipeId !== recipe.id || slot.meal !== meal) return false;
+      if (blockDates.has(slot.date)) return false;
+      const d = parseIsoLocal(slot.date);
+      return d.getDay() === targetDow && d < date && d >= cutoff;
+    });
+    if (historicalRepeat) return false;
+  }
+  if (settings.avoidSameWeek) {
+    const weekStartIso = iso(startOfWeek(dates[0]));
+    const weekEndIso = iso(addDays(startOfWeek(dates[0]), 6));
+    const sameWeek = scheduleState.some(slot =>
+      slot.recipeId === recipe.id &&
+      slot.meal === meal &&
+      !blockDates.has(slot.date) &&
+      slot.date >= weekStartIso && slot.date <= weekEndIso
+    );
+    if (sameWeek) return false;
+  }
+  return true;
+}
+
+function choosePlannerRecipe(eligible, previousRecipeId = '') {
+  if (!eligible.length) return null;
+  const alternatives = eligible.filter(r => r.id !== previousRecipeId);
+  const pool = alternatives.length ? alternatives : eligible;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 async function suggestWeekDays() {
   if (!recipes.length) return toast('Add a recipe first');
   const selected = [...els.weekPlanDays.querySelectorAll('input[type="checkbox"]:checked')]
@@ -2396,29 +2666,78 @@ async function suggestWeekDays() {
   if (!meals.length) return toast('Choose Lunch week, Dinner week, or Full week');
 
   const replaceExisting = els.replaceExistingWeekMeals.checked;
-  const workingSchedule = schedule.map(s => ({...s}));
-  let added = 0, skipped = 0;
+  const pattern = plannerPattern();
+  const allowDinnerRepeat = dinnerRepeatsAllowed();
+  let workingSchedule = schedule.map(s => ({...s}));
+  let added = 0, skipped = 0, lockedSkipped = 0;
 
-  for (const date of selected) {
-    const dateIso = iso(date);
-    for (const meal of meals) {
-      const current = workingSchedule.find(s => s.date === dateIso && s.meal === meal);
-      if (current && !replaceExisting) { skipped++; continue; }
-      const scheduleForEligibility = workingSchedule.filter(s => !(s.date === dateIso && s.meal === meal));
-      const eligible = recipes.filter(r => recipeSupportsMeal(r, meal) && !exclusionReasonAgainst(r, date, scheduleForEligibility, meal));
-      if (!eligible.length) { skipped++; continue; }
-      const picked = eligible[Math.floor(Math.random() * eligible.length)];
-      const slotId = `${dateIso}_${meal}`;
-      const nextSlot = { date: dateIso, meal, recipeId: picked.id, status: 'suggested', locked: false, people: Math.max(1, Number(settings.defaultPeople) || 2) };
-      await setDoc(doc(db,'households',householdId,'schedule',slotId), {...nextSlot, updatedAt:serverTimestamp()}, {merge:true});
-      const idx = workingSchedule.findIndex(s => s.date === dateIso && s.meal === meal);
-      if (idx >= 0) workingSchedule[idx] = {...workingSchedule[idx], ...nextSlot}; else workingSchedule.push(nextSlot);
-      added++;
+  for (const meal of meals) {
+    const targets = selected.filter(date => {
+      const current = workingSchedule.find(s => s.date === iso(date) && s.meal === meal);
+      if (slotIsLocked(current)) { lockedSkipped++; return false; }
+      if (current && !replaceExisting) { skipped++; return false; }
+      return true;
+    });
+    if (!targets.length) continue;
+
+    const targetKeys = new Set(targets.map(date => `${iso(date)}_${meal}`));
+    workingSchedule = workingSchedule.filter(slot => !targetKeys.has(`${slot.date}_${slot.meal}`));
+
+    for (const segment of splitConsecutiveDates(targets)) {
+      let blocks = patternBlocks(segment.length, pattern);
+      let fixedRecipes = null;
+
+      if (meal === 'dinner' && allowDinnerRepeat) {
+        const dinnerPool = shuffleArray(recipes.filter(r => recipeSupportsMeal(r, 'dinner')));
+        if (!dinnerPool.length) { skipped += segment.length; continue; }
+        const recipeCount = Math.min(blocks.length, dinnerPool.length);
+        blocks = collapseBlocksToCount(blocks, recipeCount);
+        fixedRecipes = dinnerPool.slice(0, recipeCount);
+      }
+
+      let cursor = 0;
+      let previousRecipeId = '';
+      for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        const blockDates = segment.slice(cursor, cursor + blocks[blockIndex]);
+        cursor += blocks[blockIndex];
+        if (!blockDates.length) continue;
+
+        let picked = fixedRecipes?.[blockIndex] || null;
+        if (!picked) {
+          const relaxDinnerRules = meal === 'dinner' && allowDinnerRepeat;
+          const eligible = relaxDinnerRules
+            ? recipes.filter(r => recipeSupportsMeal(r, meal))
+            : recipes.filter(r => plannerCandidateAllowed(r, blockDates, meal, workingSchedule));
+          picked = choosePlannerRecipe(eligible, previousRecipeId);
+        }
+        if (!picked) { skipped += blockDates.length; continue; }
+        previousRecipeId = picked.id;
+
+        for (const date of blockDates) {
+          const dateIso = iso(date);
+          const slotId = `${dateIso}_${meal}`;
+          const nextSlot = {
+            date: dateIso,
+            meal,
+            recipeId: picked.id,
+            status: 'suggested',
+            locked: false,
+            people: Math.max(1, Number(settings.defaultPeople) || 2)
+          };
+          await setDoc(doc(db,'households',householdId,'schedule',slotId), {...nextSlot, updatedAt:serverTimestamp()}, {merge:true});
+          workingSchedule.push(nextSlot);
+          added++;
+        }
+      }
     }
   }
   els.weekPlanDialog.close();
-  toast(`Suggested ${added} meal${added === 1 ? '' : 's'}${skipped ? ` · skipped ${skipped}` : ''}`);
+  const notes = [];
+  if (skipped) notes.push(`skipped ${skipped}`);
+  if (lockedSkipped) notes.push(`kept ${lockedSkipped} locked`);
+  toast(`Suggested ${added} meal${added === 1 ? '' : 's'}${notes.length ? ` · ${notes.join(' · ')}` : ''}`);
 }
+
 
 /* -------------------------------------------------------
    Recipe backup / restore
@@ -2773,6 +3092,9 @@ function wireUi() {
   els.editViewedRecipe?.addEventListener('click', editViewedRecipe);
   if (els.recipeViewDialog && els.recipeReaderScroll) enableRecipePullToClose();
   els.weekPlanScope?.addEventListener('change', renderWeekPlanDays);
+  els.weekPlanPattern?.addEventListener('change', () => {
+    if (els.weekPlanReason) els.weekPlanReason.textContent = '';
+  });
   els.selectAllWeekDays?.addEventListener('click', () => setWeekPlannerSelection('all'));
   els.selectEmptyWeekDays?.addEventListener('click', () => setWeekPlannerSelection('empty'));
   els.clearWeekDays?.addEventListener('click', () => setWeekPlannerSelection('clear'));
@@ -2874,6 +3196,7 @@ function wireUi() {
   els.reviewShopping?.addEventListener('click', openShoppingReview);
   els.copyReviewedShopping?.addEventListener('click', copyReviewedShopping);
   els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
+  els.saveShoppingDraft?.addEventListener('click', () => saveShoppingReviewDraft(true));
   els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(
