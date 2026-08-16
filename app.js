@@ -892,7 +892,7 @@ function renderMealSlot(date, meal) {
     ${recipe
       ? `<span class="meal-name">${escapeHtml(recipe.name)}</span>
          <span class="meal-view-hint">Tap to view recipe <span aria-hidden="true">›</span></span>
-         <span class="meal-meta">${recipe.prepTimeMin ? `${recipe.prepTimeMin} min · ` : ''}${slotPeopleCount(slot, recipe)} ${slotPeopleCount(slot, recipe) === 1 ? 'person' : 'people'}${slotIsLocked(slot) ? ' · 🔒 Locked' : ''}</span>`
+         <span class="meal-meta">${recipe.prepTimeMin ? `${formatDurationMinutes(recipe.prepTimeMin)} · ` : ''}${slotPeopleCount(slot, recipe)} ${slotPeopleCount(slot, recipe) === 1 ? 'person' : 'people'}${slotIsLocked(slot) ? ' · 🔒 Locked' : ''}</span>`
       : '<span class="empty-meal">Choose meal</span>'}
   `;
   main.addEventListener('click', () => {
@@ -1014,7 +1014,7 @@ function renderRecipes() {
     const photo = safePhoto(r.photoUrl || '');
     card.innerHTML = `${photo ? `<img class="recipe-photo" src="${escapeHtml(photo)}" alt="" loading="lazy">` : ''}
       <div class="recipe-body"><h3>${escapeHtml(r.name)}</h3>
-      <div class="tags recipe-card-tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span><span class="tag recipe-time-tag" aria-label="Preparation time">⏱ ${Math.min(30, Math.max(1, Number(r.prepTimeMin) || 15))} min</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+      <div class="tags recipe-card-tags"><span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(r))}</span><span class="tag recipe-time-tag" aria-label="Preparation time">⏱ ${formatDurationMinutes(Number(r.prepTimeMin) || 15)}</span>${(r.tags||[]).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
       <p class="muted small">${(r.ingredients||[]).length} ingredients · Serves ${recipeServingCount(r)}</p>
       <div class="recipe-card-footer"><span class="muted small">${escapeHtml((r.instructions||'').slice(0,80))}${(r.instructions||'').length>80?'…':''}</span><button class="secondary edit-card-button">Edit</button></div></div>`;
     card.addEventListener('click', () => openRecipeView(r));
@@ -1253,6 +1253,14 @@ function slotPeopleCount(slot, recipe) {
   if (Number.isFinite(d) && d > 0) return d;
   const r = Number(recipe?.servings);
   return Number.isFinite(r) && r > 0 ? r : 2;
+}
+
+function formatDurationMinutes(value) {
+  const minutes = Math.max(0, Math.round(Number(value) || 0));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${hours}:${String(remainder).padStart(2, '0')}`;
 }
 
 function recipeServingCount(recipe) {
@@ -1768,7 +1776,7 @@ function openRecipeView(recipe) {
   if (!recipe) return;
   viewedRecipeId = recipe.id;
   els.recipeViewName.textContent = recipe.name || 'Recipe';
-  els.recipeViewMeta.textContent = `${recipe.prepTimeMin ? `${recipe.prepTimeMin} min · ` : ''}Serves ${recipeServingCount(recipe)}`;
+  els.recipeViewMeta.textContent = `${recipe.prepTimeMin ? `${formatDurationMinutes(recipe.prepTimeMin)} · ` : ''}Serves ${recipeServingCount(recipe)}`;
   els.recipeViewTags.innerHTML = `<span class="tag meal-type-tag">${escapeHtml(recipeMealTypeLabel(recipe))}</span>` + (recipe.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
   const groups = new Map();
@@ -1945,9 +1953,9 @@ function openRecipe(
   els.recipeName.value =
     recipe?.name || '';
 
-  const recipePrepTime = Math.min(30, Math.max(1, Number(recipe?.prepTimeMin) || 15));
+  const recipePrepTime = Math.max(1, Math.round(Number(recipe?.prepTimeMin) || 15));
   els.prepTime.value = String(recipePrepTime);
-  els.prepTimeValue.textContent = `${recipePrepTime} min`;
+  els.prepTimeValue.textContent = formatDurationMinutes(recipePrepTime);
 
   els.recipeServings.value = recipeServingCount(recipe);
   recipeEditorServings = recipeServingCount(recipe);
@@ -2043,7 +2051,7 @@ async function saveRecipe(ev) {
       : 'both',
 
     prepTimeMin:
-      Math.min(30, Math.max(1, Number(els.prepTime.value) || 15)),
+      Math.max(1, Math.round(Number(els.prepTime.value) || 15)),
 
     servings:
       Math.max(1, Number(els.recipeServings.value) || 2),
@@ -2731,7 +2739,7 @@ function wireUi() {
   els.recipeServings.addEventListener('change', updateRecipeServingsAndQuantities);
 
   const updatePrepTimeLabel = () => {
-    els.prepTimeValue.textContent = `${els.prepTime.value} min`;
+    els.prepTimeValue.textContent = formatDurationMinutes(els.prepTime.value);
   };
   els.prepTime.addEventListener('input', updatePrepTimeLabel);
   els.prepTime.addEventListener('change', updatePrepTimeLabel);

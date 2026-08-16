@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1628" />
+  <link rel="stylesheet" href="styles.css?v=1629" />
 </head>
 <body>
   <div id="appShell">
@@ -234,8 +234,8 @@
             <span>Timing</span>
             <output id="prepTimeValue" for="prepTime">15 min</output>
           </span>
-          <input id="prepTime" class="timing-slider" type="range" min="1" max="30" step="1" value="15" />
-          <span class="timing-slider-scale" aria-hidden="true"><span>1 min</span><span>30 min</span></span>
+          <input id="prepTime" class="timing-slider" type="number" min="1" step="1" value="15" inputmode="numeric" />
+          <span class="timing-slider-scale" aria-hidden="true"><span>Minutes</span><span>No maximum</span></span>
         </label>
         <label>Tags<input id="recipeTags" placeholder="italian, vegetarian, quick" /></label>
       </div>
@@ -417,6 +417,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1628"></script>
+  <script type="module" src="app.js?v=1629"></script>
 </body>
 </html>
