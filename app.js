@@ -1146,90 +1146,12 @@ function shoppingBaseUnit(unit = '') {
   return { unit: u, factor: 1 };
 }
 
-function canonicalIngredientName(name = '') {
-  let n = normalizeText(name)
-    .replace(/[()]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/,$/, '')
-    .trim();
-
-  // Remove preparation/size wording that should not create duplicate shopping lines.
-  n = n
-    .replace(/^(?:small|medium|large|extra large|fresh|frozen)\s+/, '')
-    .replace(/^(?:grated|shredded|sliced|diced|chopped)\s+/, '')
-    .trim();
-
-  const tests = [
-    [/^(ground beef|minced beef|beef mince|minced meat beef|mince beef)(\b|$)/, 'Ground beef'],
-    [/^(beef|beef meat)(\b|$)/, 'Beef'],
-    [/^(ground chicken|minced chicken|chicken mince)(\b|$)/, 'Ground chicken'],
-    [/^(chicken|chicken meat)(\b|$)/, 'Chicken'],
-    [/^(chicken breast|chicken breasts|chicken breast fillet|chicken breast fillets|chicken fillet|chicken fillets)(\b|$)/, 'Chicken breast'],
-    [/^(chicken thigh|chicken thighs|boneless chicken thigh|boneless chicken thighs)(\b|$)/, 'Chicken thigh'],
-    [/^(bell pepper|bell peppers|capsicum|capsicums)(\b|$)/, 'Bell pepper'],
-    [/^(onion|onions|yellow onion|yellow onions|white onion|white onions)(\b|$)/, 'Onion'],
-    [/^(red onion|red onions)(\b|$)/, 'Red onion'],
-    [/^(garlic clove|garlic cloves|clove of garlic|cloves of garlic|minced garlic|garlic)(\b|$)/, 'Garlic'],
-    [/^(mushroom|mushrooms|button mushroom|button mushrooms|white mushroom|white mushrooms)(\b|$)/, 'Mushrooms'],
-    [/^(spinach|spinach leaves|baby spinach)(\b|$)/, 'Spinach'],
-    [/^(parmesan|parmesan cheese|parmigiano|parmigiano reggiano)(\b|$)/, 'Parmesan'],
-    [/^(cheddar|cheddar cheese)(\b|$)/, 'Cheddar'],
-    [/^(emmental|emmental cheese)(\b|$)/, 'Emmental'],
-    [/^(greek yogurt|greek yoghurt)(\b|$)/, 'Greek yogurt'],
-    [/^(creme fraiche|crème fraîche)(\b|$)/, 'Crème fraîche'],
-    [/^(tomato paste|tomato puree|tomato purée)(\b|$)/, 'Tomato paste'],
-    [/^(soy sauce|soya sauce)(\b|$)/, 'Soy sauce'],
-    [/^(olive oil|extra virgin olive oil|evoo)(\b|$)/, 'Olive oil'],
-    [/^(neutral oil|vegetable oil|canola oil)(\b|$)/, 'Neutral oil'],
-    [/^(rice vinegar|rice wine vinegar)(\b|$)/, 'Rice vinegar'],
-    [/^(lemon juice|lemon juice or lime(?: juice)?|lime juice or lemon(?: juice)?|lemon\/lime juice)(\b|$)/, 'Lemon / lime juice'],
-    [/^(lemon|lemons)(\b|$)/, 'Lemon'],
-    [/^(lime|limes)(\b|$)/, 'Lime'],
-    [/^(salmon fillet|salmon fillets|salmon filet|salmon filets)(\b|$)/, 'Salmon fillet'],
-    [/^(salmon)(\b|$)/, 'Salmon'],
-    [/^(pasta|dry pasta)(\b|$)/, 'Pasta'],
-    [/^(rice|white rice)(\b|$)/, 'Rice'],
-    [/^(butter|unsalted butter|salted butter)(\b|$)/, 'Butter'],
-    [/^(cream|heavy cream|double cream)(\b|$)/, 'Cream'],
-    [/^(wrap|wraps|tortilla|tortillas|flour tortilla|flour tortillas)(\b|$)/, 'Wraps'],
-    [/^(salt and pepper|salt & pepper)(\b|$)/, 'Salt & pepper']
-  ];
-  for (const [rx, label] of tests) if (rx.test(n)) return label;
-
-  // Conservative cleanup only: remove preparation wording after a comma.
-  n = n.split(',')[0].trim();
-  return n ? n.charAt(0).toUpperCase() + n.slice(1) : '';
-}
-
-function shoppingIngredientIdentity(name = '', unit = '') {
-  const canonicalName = canonicalIngredientName(name);
-  let normalizedUnit = normalizeUnitForShopping(unit);
-  const rawName = normalizeText(name);
-
-  // Countable ingredients written as "1 onion" and "2 pieces onions" should merge.
-  // We only infer a count unit for ingredients where one item has a clear physical meaning.
-  if (!normalizedUnit) {
-    const countable = new Set([
-      'Onion', 'Red onion', 'Bell pepper', 'Chicken breast', 'Chicken thigh',
-      'Salmon fillet', 'Mushrooms', 'Lemon', 'Lime'
-    ]);
-    if (countable.has(canonicalName)) normalizedUnit = 'piece';
-    if (canonicalName === 'Garlic' && /\bcloves?\b/.test(rawName)) normalizedUnit = 'clove';
-  }
-
-  // Juice is a liquid/amount, never a countable "piece". Some imported Notes
-  // recipes can accidentally assign piece/pc to a juice line; strip that unit
-  // rather than displaying nonsense such as "Lemon juice — 1 piece".
-  if (canonicalName === 'Lemon / lime juice' && normalizedUnit === 'piece') {
-    normalizedUnit = '';
-  }
-
-  // "garlic clove" in the name and "clove" in the unit are equivalent.
-  if (canonicalName === 'Garlic' && /\bcloves?\b/.test(rawName) && !normalizedUnit) {
-    normalizedUnit = 'clove';
-  }
-
-  return { name: canonicalName, unit: normalizedUnit };
+function displayShoppingIngredientName(name = '') {
+  // Shopping keeps the recipe ingredient wording exactly as the user entered it.
+  // No aliasing, fuzzy matching, generic-to-specific conversion, or automatic
+  // ingredient-name merging is performed. Manual merge in Review is the only
+  // way different ingredient rows are combined.
+  return String(name ?? '').trim();
 }
 
 function fractionNumber(text) {
@@ -1299,97 +1221,44 @@ function recipeServingCount(recipe) {
   return Number.isFinite(n) && n > 0 ? n : 2;
 }
 
-function resolveGenericShoppingNames(entries) {
-  const names = new Set(entries.map(e => e.name));
-  const familyRules = [
-    ['Chicken', ['Chicken breast', 'Chicken thigh', 'Ground chicken']],
-    ['Beef', ['Ground beef']],
-    ['Salmon', ['Salmon fillet']]
-  ];
-
-  for (const [generic, specifics] of familyRules) {
-    if (!names.has(generic)) continue;
-    const present = specifics.filter(name => names.has(name));
-    // Only resolve a generic ingredient when there is exactly one plausible
-    // specific form in this week's plan. This avoids unsafe merges such as
-    // generic chicken when both breast and thigh are scheduled.
-    if (present.length === 1) {
-      entries.forEach(entry => {
-        if (entry.name === generic) entry.name = present[0];
-      });
-    }
-  }
-  return entries;
+function shoppingEntryKey(slot, recipe, ingredientIndex) {
+  const slotKey = slot?.id || `${slot?.date || 'date'}_${slot?.meal || 'meal'}`;
+  return `${slotKey}|${recipe?.id || 'recipe'}|${ingredientIndex}`;
 }
 
 function mergedShoppingItems() {
-  const entries = [];
+  // Despite the historical function name, this intentionally returns one row
+  // per scheduled recipe ingredient. Automatic ingredient merging has been
+  // removed. The user can explicitly merge selected rows in Shopping Review.
+  const items = [];
   for (const slot of getWeekSlots(true)) {
     const recipe = recipeById(slot.recipeId);
     if (!recipe) continue;
     const people = slotPeopleCount(slot, recipe);
     const multiplier = people / recipeServingCount(recipe);
 
-    for (const ing of recipe.ingredients || []) {
-      const identity = shoppingIngredientIdentity(ing.name || '', ing.unit || '');
-      if (!identity.name) continue;
-      const base = shoppingBaseUnit(identity.unit);
-      const scaled = scaledQuantity(ing.quantity, multiplier, base.factor);
-      entries.push({
-        name: identity.name,
-        unit: base.unit,
-        scaled,
-        sourceRecipeId: recipe.id
+    (recipe.ingredients || []).forEach((ing, ingredientIndex) => {
+      const name = displayShoppingIngredientName(ing.name || '');
+      if (!name) return;
+      const unit = normalizeUnitForShopping(ing.unit || '');
+      const scaled = scaledQuantity(ing.quantity, multiplier, 1);
+      items.push({
+        key: shoppingEntryKey(slot, recipe, ingredientIndex),
+        name,
+        sources: 1,
+        sourceRecipeCount: 1,
+        sourceRecipeId: recipe.id,
+        components: [{
+          unit,
+          minQuantity: scaled.min ?? 0,
+          maxQuantity: scaled.max ?? 0,
+          hasNumericQuantity: scaled.min != null && scaled.max != null,
+          textQuantities: scaled.text ? [scaled.text] : []
+        }]
       });
-    }
+    });
   }
-
-  resolveGenericShoppingNames(entries);
-
-  // One shopping row per canonical ingredient name. Quantities with compatible
-  // units are added together; incompatible units are retained as components on
-  // that same row (e.g. Chicken breast — 500 g + 1 piece).
-  const byName = new Map();
-  for (const entry of entries) {
-    const nameKey = normalizeText(entry.name);
-    if (!byName.has(nameKey)) {
-      byName.set(nameKey, {
-        name: entry.name,
-        sources: 0,
-        sourceRecipes: new Set(),
-        components: new Map()
-      });
-    }
-    const item = byName.get(nameKey);
-    item.sources++;
-    item.sourceRecipes.add(entry.sourceRecipeId);
-    const unitKey = entry.unit || '';
-    if (!item.components.has(unitKey)) {
-      item.components.set(unitKey, {
-        unit: unitKey,
-        minQuantity: 0,
-        maxQuantity: 0,
-        hasNumericQuantity: false,
-        textQuantities: []
-      });
-    }
-    const component = item.components.get(unitKey);
-    const scaled = entry.scaled;
-    if (scaled.min != null && scaled.max != null) {
-      component.minQuantity += scaled.min;
-      component.maxQuantity += scaled.max;
-      component.hasNumericQuantity = true;
-    } else if (scaled.text) {
-      component.textQuantities.push(scaled.text);
-    }
-  }
-
-  return [...byName.values()].map(item => ({
-    name: item.name,
-    sources: item.sources,
-    sourceRecipeCount: item.sourceRecipes.size,
-    components: [...item.components.values()]
-  })).sort((a, b) => a.name.localeCompare(b.name));
+  return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
 function formatShoppingComponent(component) {
@@ -1430,14 +1299,12 @@ function shoppingText() {
 
 function shoppingPayload() {
   return {
-    schema: 'meal-planner.shopping.v3',
+    schema: 'meal-planner.shopping.v4',
     weekStart: iso(weekStart),
     generatedAt: new Date().toISOString(),
     items: mergedShoppingItems().map(i => ({
       name: i.name,
       displayQuantity: formatQty(i),
-      mergedSources: i.sources,
-      mergedRecipes: i.sourceRecipeCount,
       components: i.components.map(c => ({
         unit: c.unit,
         minQuantity: c.hasNumericQuantity ? c.minQuantity : null,
@@ -1451,7 +1318,7 @@ function shoppingPayload() {
 function renderShopping() {
   const items = mergedShoppingItems();
   els.shoppingList.innerHTML = items.length
-    ? items.map(i => `<div class="shopping-item"><span><strong>${escapeHtml(i.name)}</strong>${i.sourceRecipeCount > 1 ? `<small class="shopping-merged-note">merged from ${i.sourceRecipeCount} recipes</small>` : ''}</span><span class="shopping-qty">${escapeHtml(formatQty(i))}</span></div>`).join('')
+    ? items.map(i => `<div class="shopping-item"><span><strong>${escapeHtml(i.name)}</strong></span><span class="shopping-qty">${escapeHtml(formatQty(i))}</span></div>`).join('')
     : '<div class="empty-state">Schedule meals this week to build a shopping list.</div>';
   els.shoppingJson.textContent = JSON.stringify(shoppingPayload(), null, 2);
 }
@@ -1461,7 +1328,7 @@ function shoppingDraftStorageKey() {
 }
 
 function shoppingReviewKey(item) {
-  return `ingredient:${normalizeText(item?.name || '')}`;
+  return item?.key || `ingredient:${normalizeText(item?.name || '')}:${Math.random().toString(36).slice(2)}`;
 }
 
 function currentShoppingReviewSource() {
@@ -1569,51 +1436,6 @@ function reconcileShoppingReviewDraft(source, draft) {
   return rows;
 }
 
-function normalizeShoppingReviewName(value = '') {
-  return normalizeText(value)
-    .replace(/[^a-z0-9à-ÿ\s]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function shoppingReviewNameTokens(value = '') {
-  const stop = new Set(['fresh', 'dried', 'organic', 'small', 'medium', 'large', 'extra', 'virgin', 'the', 'a', 'an']);
-  return normalizeShoppingReviewName(value).split(' ').filter(token => token && !stop.has(token));
-}
-
-function shoppingReviewNamesLookSimilar(a = '', b = '') {
-  const left = normalizeShoppingReviewName(a);
-  const right = normalizeShoppingReviewName(b);
-  if (!left || !right || left === right) return left === right && !!left;
-  if (left.includes(right) || right.includes(left)) return true;
-  const leftTokens = shoppingReviewNameTokens(left);
-  const rightTokens = shoppingReviewNameTokens(right);
-  if (!leftTokens.length || !rightTokens.length) return false;
-  const shared = leftTokens.filter(token => rightTokens.includes(token));
-  return shared.some(token => token.length >= 4) && (shared.length >= 2 || leftTokens.length === 1 || rightTokens.length === 1);
-}
-
-function refreshShoppingReviewSimilarityHints() {
-  if (!els.shoppingReviewList) return;
-  const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')];
-  rows.forEach(row => {
-    row.classList.remove('is-possible-match');
-    row.removeAttribute('data-possible-match');
-  });
-  const active = rows.filter(row => !row.classList.contains('is-ignored'));
-  for (let i = 0; i < active.length - 1; i++) {
-    const current = active[i];
-    const next = active[i + 1];
-    const currentName = current.querySelector('.shopping-review-name')?.value || '';
-    const nextName = next.querySelector('.shopping-review-name')?.value || '';
-    if (!shoppingReviewNamesLookSimilar(currentName, nextName)) continue;
-    current.classList.add('is-possible-match');
-    next.classList.add('is-possible-match');
-    current.dataset.possibleMatch = nextName;
-    next.dataset.possibleMatch = currentName;
-  }
-}
-
 function sortShoppingReviewRows() {
   if (!els.shoppingReviewList) return;
   const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')];
@@ -1626,12 +1448,6 @@ function sortShoppingReviewRows() {
     return aName.localeCompare(bName, undefined, { sensitivity: 'base', numeric: true });
   });
   rows.forEach(row => els.shoppingReviewList.appendChild(row));
-  refreshShoppingReviewSimilarityHints();
-}
-
-function scheduleShoppingReviewSort() {
-  clearTimeout(shoppingReviewSortTimer);
-  shoppingReviewSortTimer = setTimeout(sortShoppingReviewRows, 350);
 }
 
 function openShoppingReview() {
@@ -1681,8 +1497,10 @@ function addShoppingReviewRow(item, options = {}) {
   nameInput.addEventListener('input', () => {
     row.dataset.nameEdited = String(nameInput.value.trim() !== row.dataset.originalName);
     scheduleShoppingReviewAutosave();
-    scheduleShoppingReviewSort();
   });
+  // Do not move the row while the user is typing. Re-sort only after the
+  // ingredient field loses focus / the edit is committed.
+  nameInput.addEventListener('change', sortShoppingReviewRows);
   qtyInput.addEventListener('input', () => {
     row.dataset.quantityEdited = String(qtyInput.value.trim() !== row.dataset.originalQuantity);
     scheduleShoppingReviewAutosave();
