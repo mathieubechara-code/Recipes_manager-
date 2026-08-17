@@ -66,9 +66,10 @@ let recipeReaderManualScrollUntil = 0;
 
 let pendingRestoreBackup = null;
 let shoppingReviewSource = [];
-let shoppingReviewRemovedKeys = new Set();
+let shoppingReviewRemovedKeys = new Set(); // legacy drafts only; no X/remove action in Beta 8
 let shoppingReviewAutosaveTimer = null;
 let shoppingReviewSortTimer = null;
+let shoppingReviewMode = 'unsent';
 let recipeEditorServings = 2;
 let slotPeopleSaveTimer = null;
 
@@ -1226,12 +1227,24 @@ function shoppingEntryKey(slot, recipe, ingredientIndex) {
   return `${slotKey}|${recipe?.id || 'recipe'}|${ingredientIndex}`;
 }
 
-function mergedShoppingItems() {
-  // Automatic merge is deliberately conservative: only ingredients whose
-  // normalized display name AND normalized unit are exact matches are merged.
-  // Everything else remains separate for manual review.
-  const groups = new Map();
+function shoppingSentWeekMap() {
+  return settings?.shoppingSentHistory?.[iso(weekStart)] || {};
+}
 
+function shoppingSourceSignature(entry) {
+  return JSON.stringify({
+    recipeId: entry.recipeId,
+    slotId: entry.slotId,
+    people: entry.people,
+    ingredientIndex: entry.ingredientIndex,
+    name: normalizeText(entry.name),
+    unit: normalizeText(entry.unit),
+    quantity: entry.sourceQuantity
+  });
+}
+
+function rawShoppingEntries() {
+  const entries = [];
   for (const slot of getWeekSlots(true)) {
     const recipe = recipeById(slot.recipeId);
     if (!recipe) continue;
@@ -1242,9 +1255,6 @@ function mergedShoppingItems() {
       const name = displayShoppingIngredientName(ing.name || '');
       if (!name) return;
       const unit = normalizeUnitForShopping(ing.unit || '');
-      const normalizedName = normalizeText(name);
-      const normalizedUnit = normalizeText(unit);
-      const groupKey = `exact:${normalizedName}|${normalizedUnit}`;
       const sourceKey = shoppingEntryKey(slot, recipe, ingredientIndex);
       const scaled = scaledQuantity(ing.quantity, multiplier, 1);
       const sourceComponent = {
@@ -1256,46 +1266,87 @@ function mergedShoppingItems() {
       };
       const sourceQuantity = formatShoppingComponent(sourceComponent);
       const sourceLine = `${name}${sourceQuantity ? ` — ${sourceQuantity}` : ''}`;
-
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, {
-          key: groupKey,
-          sourceKeys: [],
-          name,
-          sources: 0,
-          sourceRecipeIds: new Set(),
-          components: [],
-          sourceLines: []
-        });
-      }
-
-      const item = groups.get(groupKey);
-      item.sourceKeys.push(sourceKey);
-      item.sources += 1;
-      item.sourceRecipeIds.add(recipe.id);
-      item.sourceLines.push(sourceLine);
-
-      // Exact unit match means components are compatible for direct summing.
-      let component = item.components.find(c => c.unit === unit);
-      if (!component) {
-        component = {
-          unit,
-          minQuantity: 0,
-          maxQuantity: 0,
-          hasNumericQuantity: false,
-          textQuantities: []
-        };
-        item.components.push(component);
-      }
-      if (sourceComponent.hasNumericQuantity) {
-        component.hasNumericQuantity = true;
-        component.minQuantity += sourceComponent.minQuantity;
-        component.maxQuantity += sourceComponent.maxQuantity;
-      }
-      if (sourceComponent.textQuantities?.length) {
-        component.textQuantities.push(...sourceComponent.textQuantities);
-      }
+      const entry = {
+        key: sourceKey,
+        slotId: slot?.id || `${slot?.date || 'date'}_${slot?.meal || 'meal'}`,
+        recipeId: recipe.id,
+        ingredientIndex,
+        people,
+        name,
+        unit,
+        component: sourceComponent,
+        sourceQuantity,
+        sourceLine
+      };
+      entry.signature = shoppingSourceSignature(entry);
+      entries.push(entry);
     });
+  }
+  return entries;
+}
+
+function isShoppingEntrySent(entry) {
+  return shoppingSentWeekMap()?.[entry.key] === entry.signature;
+}
+
+function mergedShoppingItems(options = {}) {
+  // Exact-match only. Sent and unsent entries are never auto-merged together,
+  // which keeps reminder-history quantities unambiguous.
+  const mode = options.sentMode || 'all'; // all | unsent | sent
+  const separateSentState = !!options.separateSentState;
+  const groups = new Map();
+
+  for (const entry of rawShoppingEntries()) {
+    const sent = isShoppingEntrySent(entry);
+    if (mode === 'unsent' && sent) continue;
+    if (mode === 'sent' && !sent) continue;
+
+    const normalizedName = normalizeText(entry.name);
+    const normalizedUnit = normalizeText(entry.unit);
+    const groupKey = `exact:${normalizedName}|${normalizedUnit}${separateSentState ? `|${sent ? 'sent' : 'unsent'}` : ''}`;
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        key: groupKey,
+        sourceKeys: [],
+        sourceSignatures: {},
+        name: entry.name,
+        sources: 0,
+        sourceRecipeIds: new Set(),
+        components: [],
+        sourceLines: [],
+        sentCount: 0,
+        unsentCount: 0
+      });
+    }
+
+    const item = groups.get(groupKey);
+    item.sourceKeys.push(entry.key);
+    item.sourceSignatures[entry.key] = entry.signature;
+    item.sources += 1;
+    item.sourceRecipeIds.add(entry.recipeId);
+    item.sourceLines.push(entry.sourceLine);
+    if (sent) item.sentCount += 1; else item.unsentCount += 1;
+
+    let component = item.components.find(c => c.unit === entry.unit);
+    if (!component) {
+      component = {
+        unit: entry.unit,
+        minQuantity: 0,
+        maxQuantity: 0,
+        hasNumericQuantity: false,
+        textQuantities: []
+      };
+      item.components.push(component);
+    }
+    if (entry.component.hasNumericQuantity) {
+      component.hasNumericQuantity = true;
+      component.minQuantity += entry.component.minQuantity;
+      component.maxQuantity += entry.component.maxQuantity;
+    }
+    if (entry.component.textQuantities?.length) {
+      component.textQuantities.push(...entry.component.textQuantities);
+    }
   }
 
   return [...groups.values()]
@@ -1304,7 +1355,8 @@ function mergedShoppingItems() {
       sourceRecipeCount: item.sourceRecipeIds.size,
       sourceRecipeIds: [...item.sourceRecipeIds],
       mergedBy: item.sources > 1 ? 'app' : '',
-      sourceLines: item.sourceLines
+      sourceLines: item.sourceLines,
+      sentStatus: item.sentCount > 0 && item.unsentCount === 0 ? 'sent' : (item.unsentCount > 0 && item.sentCount === 0 ? 'unsent' : 'mixed')
     }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
@@ -1379,14 +1431,17 @@ function shoppingReviewKey(item) {
   return item?.key || `ingredient:${normalizeText(item?.name || '')}:${Math.random().toString(36).slice(2)}`;
 }
 
-function currentShoppingReviewSource() {
-  return mergedShoppingItems().map(item => ({
+function currentShoppingReviewSource(mode = shoppingReviewMode) {
+  const sentMode = mode === 'all' ? 'all' : 'unsent';
+  return mergedShoppingItems({ sentMode, separateSentState: mode === 'all' }).map(item => ({
     key: shoppingReviewKey(item),
     sourceKeys: item.sourceKeys || [shoppingReviewKey(item)],
+    sourceSignatures: item.sourceSignatures || {},
     name: item.name,
     quantity: formatQty(item),
     mergedBy: item.mergedBy || '',
-    sourceLines: item.sourceLines || []
+    sourceLines: item.sourceLines || [],
+    sentStatus: item.sentStatus || 'unsent'
   }));
 }
 
@@ -1405,6 +1460,8 @@ function loadShoppingReviewDraft() {
 function serializeShoppingReviewDraft() {
   const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')].map(row => ({
     sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]'),
+    sourceSignatures: JSON.parse(row.dataset.sourceSignatures || '{}'),
+    sentStatus: row.dataset.sentStatus || 'unsent',
     name: row.querySelector('.shopping-review-name')?.value.trim() || '',
     quantity: row.querySelector('.shopping-review-qty')?.value.trim() || '',
     originalName: row.dataset.originalName || '',
@@ -1420,7 +1477,7 @@ function serializeShoppingReviewDraft() {
     weekStart: iso(weekStart),
     savedAt: new Date().toISOString(),
     rows,
-    removedSourceKeys: [...shoppingReviewRemovedKeys]
+    removedSourceKeys: []
   };
 }
 
@@ -1449,7 +1506,11 @@ function clearShoppingReviewDraft() {
 }
 
 function reconcileShoppingReviewDraft(source, draft) {
-  const sourceMap = new Map(source.map(item => [item.key, item]));
+  const sourceMap = new Map();
+  source.forEach(item => {
+    sourceMap.set(item.key, item);
+    (item.sourceKeys || []).forEach(key => sourceMap.set(key, item));
+  });
   const consumed = new Set();
   shoppingReviewRemovedKeys = new Set((draft?.removedSourceKeys || []).filter(key => sourceMap.has(key)));
   const rows = [];
@@ -1458,7 +1519,7 @@ function reconcileShoppingReviewDraft(source, draft) {
     const sourceKeys = (saved.sourceKeys || []).filter(key => sourceMap.has(key));
     if (!sourceKeys.length) continue;
     sourceKeys.forEach(key => consumed.add(key));
-    const currentItems = sourceKeys.map(key => sourceMap.get(key));
+    const currentItems = [...new Set(sourceKeys.map(key => sourceMap.get(key)).filter(Boolean))];
     const currentQuantity = mergeReviewQuantities(currentItems.map(item => item.quantity));
     const fallbackName = currentItems[0]?.name || saved.name || '';
     const mergedBy = saved.mergedBy === 'user'
@@ -1467,8 +1528,12 @@ function reconcileShoppingReviewDraft(source, draft) {
     const sourceLines = saved.mergedBy === 'user'
       ? (saved.sourceLines || [])
       : currentItems.flatMap(item => item.sourceLines || []);
+    const sourceSignatures = Object.assign({}, ...currentItems.map(item => item.sourceSignatures || {}));
+    const sentStatus = currentItems.every(item => item.sentStatus === 'sent') ? 'sent' : 'unsent';
     rows.push({
       sourceKeys,
+      sourceSignatures,
+      sentStatus,
       name: saved.nameEdited || sourceKeys.length > 1 ? saved.name : fallbackName,
       quantity: saved.quantityEdited ? saved.quantity : currentQuantity,
       originalName: fallbackName,
@@ -1482,9 +1547,12 @@ function reconcileShoppingReviewDraft(source, draft) {
   }
 
   for (const item of source) {
-    if (consumed.has(item.key) || shoppingReviewRemovedKeys.has(item.key)) continue;
+    const itemSourceKeys = item.sourceKeys || [item.key];
+    if (itemSourceKeys.every(key => consumed.has(key))) continue;
     rows.push({
-      sourceKeys: [item.key],
+      sourceKeys: item.sourceKeys || [item.key],
+      sourceSignatures: item.sourceSignatures || {},
+      sentStatus: item.sentStatus || 'unsent',
       name: item.name,
       quantity: item.quantity,
       originalName: item.name,
@@ -1513,19 +1581,30 @@ function sortShoppingReviewRows() {
   rows.forEach(row => els.shoppingReviewList.appendChild(row));
 }
 
-function openShoppingReview() {
-  shoppingReviewSource = currentShoppingReviewSource();
-  if (!shoppingReviewSource.length) return toast('Shopping list is empty');
+function renderShoppingReviewForMode(mode = shoppingReviewMode, options = {}) {
+  shoppingReviewMode = mode === 'all' ? 'all' : 'unsent';
+  shoppingReviewSource = currentShoppingReviewSource(shoppingReviewMode);
   const draft = loadShoppingReviewDraft();
   const rows = reconcileShoppingReviewDraft(shoppingReviewSource, draft);
   els.shoppingReviewList.innerHTML = '';
   rows.forEach(item => addShoppingReviewRow(item));
   sortShoppingReviewRows();
+  if (els.shoppingReviewMode) els.shoppingReviewMode.value = shoppingReviewMode;
   if (els.shoppingDraftStatus) {
-    els.shoppingDraftStatus.textContent = draft ? 'Saved draft resumed and updated from this week' : 'Autosaves while you review';
+    const unsentCount = rawShoppingEntries().filter(entry => !isShoppingEntrySent(entry)).length;
+    els.shoppingDraftStatus.textContent = draft
+      ? `Autosaved · ${unsentCount} source item${unsentCount === 1 ? '' : 's'} not sent`
+      : `${unsentCount} source item${unsentCount === 1 ? '' : 's'} not sent · autosaves`;
   }
   updateShoppingMergeToolbar();
-  els.shoppingReviewDialog.showModal();
+  if (!options.keepOpen && !els.shoppingReviewDialog.open) els.shoppingReviewDialog.showModal();
+}
+
+function openShoppingReview() {
+  shoppingReviewMode = 'unsent';
+  if (!rawShoppingEntries().length) return toast('Shopping list is empty');
+  renderShoppingReviewForMode('unsent');
+  const draft = loadShoppingReviewDraft();
   if (draft) toast('Saved shopping review resumed');
 }
 
@@ -1535,6 +1614,8 @@ function addShoppingReviewRow(item, options = {}) {
   row.className = 'shopping-review-row';
   const sourceKeys = options.sourceKeys || parsed.sourceKeys || [];
   row.dataset.sourceKeys = JSON.stringify(sourceKeys);
+  row.dataset.sourceSignatures = JSON.stringify(options.sourceSignatures ?? parsed.sourceSignatures ?? {});
+  row.dataset.sentStatus = options.sentStatus ?? parsed.sentStatus ?? 'unsent';
   row.dataset.originalName = options.originalName ?? parsed.originalName ?? parsed.name ?? '';
   row.dataset.originalQuantity = options.originalQuantity ?? parsed.originalQuantity ?? parsed.quantity ?? '';
   row.dataset.nameEdited = String(options.nameEdited ?? parsed.nameEdited ?? false);
@@ -1546,6 +1627,9 @@ function addShoppingReviewRow(item, options = {}) {
     : row.dataset.mergedBy === 'user'
       ? '<span class="shopping-merge-badge user-merged">You merged</span>'
       : '';
+  const sentBadge = row.dataset.sentStatus === 'sent'
+    ? '<span class="shopping-sent-badge">Sent to Reminders</span>'
+    : '<span class="shopping-unsent-badge">Not sent</span>';
   const sourceLines = JSON.parse(row.dataset.sourceLines || '[]');
   const sourceDetail = row.dataset.mergedBy && sourceLines.length > 1
     ? `<details class="shopping-merge-detail"><summary>${sourceLines.length} original entries</summary><div>${sourceLines.map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div></details>`
@@ -1559,15 +1643,23 @@ function addShoppingReviewRow(item, options = {}) {
         <input class="shopping-review-name" value="${escapeHtml(parsed.name || '')}" aria-label="Ingredient" placeholder="Ingredient">
         <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity || '')}" aria-label="Quantity" placeholder="Quantity">
       </div>
-      <div class="shopping-review-meta">${mergeBadge}${sourceDetail}</div>
+      <div class="shopping-review-meta">${sentBadge}${mergeBadge}${sourceDetail}</div>
     </div>
-    <button type="button" class="shopping-review-ignore" aria-pressed="false">Ignore</button>
-    <button type="button" class="shopping-review-remove" aria-label="Remove">×</button>`;
+    <button type="button" class="shopping-review-ignore" aria-pressed="false">Ignore</button>`;
 
   const checkbox = row.querySelector('.shopping-review-checkbox');
   const ignore = row.querySelector('.shopping-review-ignore');
   const nameInput = row.querySelector('.shopping-review-name');
   const qtyInput = row.querySelector('.shopping-review-qty');
+  const rowIsSent = row.dataset.sentStatus === 'sent';
+  row.classList.toggle('is-sent', rowIsSent);
+  if (rowIsSent) {
+    checkbox.disabled = true;
+    nameInput.readOnly = true;
+    qtyInput.readOnly = true;
+    ignore.disabled = true;
+    ignore.textContent = 'Sent';
+  }
   checkbox.checked = !!options.selected;
   checkbox.addEventListener('change', updateShoppingMergeToolbar);
 
@@ -1584,6 +1676,7 @@ function addShoppingReviewRow(item, options = {}) {
   });
 
   const setIgnored = ignored => {
+    if (rowIsSent) return;
     row.classList.toggle('is-ignored', ignored);
     ignore.textContent = ignored ? 'Use' : 'Ignore';
     ignore.setAttribute('aria-pressed', String(ignored));
@@ -1594,21 +1687,14 @@ function addShoppingReviewRow(item, options = {}) {
     sortShoppingReviewRows();
   };
   ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored')));
-  row.querySelector('.shopping-review-remove').addEventListener('click', () => {
-    for (const key of JSON.parse(row.dataset.sourceKeys || '[]')) shoppingReviewRemovedKeys.add(key);
-    row.remove();
-    updateShoppingMergeToolbar();
-    sortShoppingReviewRows();
-    scheduleShoppingReviewAutosave();
-  });
 
   els.shoppingReviewList.appendChild(row);
-  setIgnored(!!(options.ignored ?? parsed.ignored));
+  if (!rowIsSent) setIgnored(!!(options.ignored ?? parsed.ignored));
 }
 
 function resetShoppingReviewToGenerated() {
   if (!els.shoppingReviewList) return;
-  const confirmed = confirm('Reset this review to the shopping list generated from the current meal plan? Your manual edits, ignores, merges and removals for this review will be cleared.');
+  const confirmed = confirm('Reset this review to the shopping list generated from the current meal plan? Your manual edits, ignores and merges for this review will be cleared.');
   if (!confirmed) return;
 
   localStorage.removeItem(shoppingDraftStorageKey());
@@ -1625,6 +1711,7 @@ function resetShoppingReviewToGenerated() {
 function selectedShoppingReviewRows() {
   return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
     .filter(row => !row.classList.contains('is-ignored'))
+    .filter(row => row.dataset.sentStatus !== 'sent')
     .filter(row => row.querySelector('.shopping-review-checkbox')?.checked);
 }
 
@@ -1695,6 +1782,8 @@ function mergeSelectedShoppingRows() {
     name: row.querySelector('.shopping-review-name')?.value.trim() || '',
     quantity: row.querySelector('.shopping-review-qty')?.value.trim() || '',
     sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]'),
+    sourceSignatures: JSON.parse(row.dataset.sourceSignatures || '{}'),
+    sentStatus: row.dataset.sentStatus || 'unsent',
     sourceLines: JSON.parse(row.dataset.sourceLines || '[]')
   }));
   const suggestedName = parsed[0]?.name || 'Merged item';
@@ -1706,7 +1795,10 @@ function mergeSelectedShoppingRows() {
   const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
   const firstRow = rows[0];
   const sourceKeys = [...new Set(parsed.flatMap(item => item.sourceKeys))];
+  const sourceSignatures = Object.assign({}, ...parsed.map(item => item.sourceSignatures || {}));
   firstRow.dataset.sourceKeys = JSON.stringify(sourceKeys);
+  firstRow.dataset.sourceSignatures = JSON.stringify(sourceSignatures);
+  firstRow.dataset.sentStatus = 'unsent';
   firstRow.dataset.originalName = name;
   firstRow.dataset.originalQuantity = mergedQuantity;
   firstRow.dataset.nameEdited = 'true';
@@ -1731,6 +1823,7 @@ function mergeSelectedShoppingRows() {
 function reviewedShoppingText() {
   return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
     .filter(row => !row.classList.contains('is-ignored'))
+    .filter(row => row.dataset.sentStatus !== 'sent')
     .map(row => {
       const name = row.querySelector('.shopping-review-name')?.value.trim() || '';
       const quantity = row.querySelector('.shopping-review-qty')?.value.trim() || '';
@@ -1748,11 +1841,46 @@ async function copyReviewedShopping() {
   toast('Reviewed shopping list copied');
 }
 
+async function markReviewedShoppingAsSent() {
+  const rows = [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
+    .filter(row => !row.classList.contains('is-ignored'))
+    .filter(row => row.dataset.sentStatus !== 'sent');
+  if (!rows.length) return 0;
+
+  const history = { ...(settings.shoppingSentHistory || {}) };
+  const weekKey = iso(weekStart);
+  const weekMap = { ...(history[weekKey] || {}) };
+  let count = 0;
+  for (const row of rows) {
+    const signatures = JSON.parse(row.dataset.sourceSignatures || '{}');
+    for (const [key, signature] of Object.entries(signatures)) {
+      if (!key || !signature) continue;
+      weekMap[key] = signature;
+      count += 1;
+    }
+  }
+  history[weekKey] = weekMap;
+
+  // Keep shared reminder history bounded. Eight recent week keys is ample for
+  // avoiding accidental duplicate sends while preventing unbounded growth.
+  const weekKeys = Object.keys(history).sort();
+  while (weekKeys.length > 8) delete history[weekKeys.shift()];
+
+  settings = { ...settings, shoppingSentHistory: history };
+  await setDoc(
+    doc(db, 'households', householdId, 'settings', 'shared'),
+    { shoppingSentHistory: history, shoppingSentUpdatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  return count;
+}
+
 async function sendReviewedShopping() {
   const text = reviewedShoppingText();
-  if (!text) return toast('Shopping list is empty');
+  if (!text) return toast('No unsent shopping items');
   await navigator.clipboard.writeText(text);
-  clearShoppingReviewDraft();
+  await markReviewedShoppingAsSent();
+  saveShoppingReviewDraft(false);
   els.shoppingReviewDialog.close();
   const url = `shortcuts://run-shortcut?name=${encodeURIComponent(settings.shortcutName || 'Kitchen Week to Reminders')}&input=clipboard`;
   window.location.href = url;
@@ -2835,6 +2963,7 @@ async function saveSettings(ev) {
   ev.preventDefault();
 
   settings = {
+    ...settings,
     repeatWeeks:
       Math.max(
         0,
@@ -3188,6 +3317,10 @@ function wireUi() {
   els.reviewShopping?.addEventListener('click', openShoppingReview);
   els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
   els.resetShoppingReview?.addEventListener('click', resetShoppingReviewToGenerated);
+  els.shoppingReviewMode?.addEventListener('change', () => {
+    saveShoppingReviewDraft(false);
+    renderShoppingReviewForMode(els.shoppingReviewMode.value, { keepOpen: true });
+  });
   els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(

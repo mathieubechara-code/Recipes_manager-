@@ -13,7 +13,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1700b7" />
+  <link rel="stylesheet" href="styles.css?v=1700b8" />
 </head>
 <body>
   <div id="appShell">
@@ -394,6 +394,13 @@
         <span id="shoppingDraftStatus" class="muted small">Autosaves while you review</span>
         <button id="resetShoppingReview" type="button" class="text-button shopping-reset-button">Reset to generated list</button>
       </div>
+      <div class="shopping-review-mode-row">
+        <label for="shoppingReviewMode">Show</label>
+        <select id="shoppingReviewMode" aria-label="Shopping review view">
+          <option value="unsent">Not sent</option>
+          <option value="all">All</option>
+        </select>
+      </div>
       <div id="shoppingReviewList" class="shopping-review-list"></div>
       <div class="shopping-review-floating" aria-live="polite">
         <span id="shoppingMergeSelectionCount" class="small">Select 2+ items</span>
@@ -401,7 +408,7 @@
       </div>
       <div class="dialog-actions shopping-review-actions">
         <button type="button" class="secondary close-dialog">Close</button>
-        <button id="sendReviewedShopping" type="button" class="primary">Send to Reminders</button>
+        <button id="sendReviewedShopping" type="button" class="primary">Send not sent to Reminders</button>
       </div>
     </div>
   </dialog>
@@ -426,6 +433,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1700b7"></script>
+  <script type="module" src="app.js?v=1700b8"></script>
 </body>
 </html>
