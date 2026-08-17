@@ -1227,10 +1227,11 @@ function shoppingEntryKey(slot, recipe, ingredientIndex) {
 }
 
 function mergedShoppingItems() {
-  // Despite the historical function name, this intentionally returns one row
-  // per scheduled recipe ingredient. Automatic ingredient merging has been
-  // removed. The user can explicitly merge selected rows in Shopping Review.
-  const items = [];
+  // Automatic merge is deliberately conservative: only ingredients whose
+  // normalized display name AND normalized unit are exact matches are merged.
+  // Everything else remains separate for manual review.
+  const groups = new Map();
+
   for (const slot of getWeekSlots(true)) {
     const recipe = recipeById(slot.recipeId);
     if (!recipe) continue;
@@ -1241,24 +1242,71 @@ function mergedShoppingItems() {
       const name = displayShoppingIngredientName(ing.name || '');
       if (!name) return;
       const unit = normalizeUnitForShopping(ing.unit || '');
+      const normalizedName = normalizeText(name);
+      const normalizedUnit = normalizeText(unit);
+      const groupKey = `exact:${normalizedName}|${normalizedUnit}`;
+      const sourceKey = shoppingEntryKey(slot, recipe, ingredientIndex);
       const scaled = scaledQuantity(ing.quantity, multiplier, 1);
-      items.push({
-        key: shoppingEntryKey(slot, recipe, ingredientIndex),
-        name,
-        sources: 1,
-        sourceRecipeCount: 1,
-        sourceRecipeId: recipe.id,
-        components: [{
+      const sourceComponent = {
+        unit,
+        minQuantity: scaled.min ?? 0,
+        maxQuantity: scaled.max ?? 0,
+        hasNumericQuantity: scaled.min != null && scaled.max != null,
+        textQuantities: scaled.text ? [scaled.text] : []
+      };
+      const sourceQuantity = formatShoppingComponent(sourceComponent);
+      const sourceLine = `${name}${sourceQuantity ? ` — ${sourceQuantity}` : ''}`;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          key: groupKey,
+          sourceKeys: [],
+          name,
+          sources: 0,
+          sourceRecipeIds: new Set(),
+          components: [],
+          sourceLines: []
+        });
+      }
+
+      const item = groups.get(groupKey);
+      item.sourceKeys.push(sourceKey);
+      item.sources += 1;
+      item.sourceRecipeIds.add(recipe.id);
+      item.sourceLines.push(sourceLine);
+
+      // Exact unit match means components are compatible for direct summing.
+      let component = item.components.find(c => c.unit === unit);
+      if (!component) {
+        component = {
           unit,
-          minQuantity: scaled.min ?? 0,
-          maxQuantity: scaled.max ?? 0,
-          hasNumericQuantity: scaled.min != null && scaled.max != null,
-          textQuantities: scaled.text ? [scaled.text] : []
-        }]
-      });
+          minQuantity: 0,
+          maxQuantity: 0,
+          hasNumericQuantity: false,
+          textQuantities: []
+        };
+        item.components.push(component);
+      }
+      if (sourceComponent.hasNumericQuantity) {
+        component.hasNumericQuantity = true;
+        component.minQuantity += sourceComponent.minQuantity;
+        component.maxQuantity += sourceComponent.maxQuantity;
+      }
+      if (sourceComponent.textQuantities?.length) {
+        component.textQuantities.push(...sourceComponent.textQuantities);
+      }
     });
   }
-  return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+
+  return [...groups.values()]
+    .map(item => ({
+      ...item,
+      sourceRecipeCount: item.sourceRecipeIds.size,
+      sourceRecipeIds: [...item.sourceRecipeIds],
+      mergedBy: item.sources > 1 ? 'app' : '',
+      sourceLines: item.sourceLines
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
 function formatShoppingComponent(component) {
@@ -1334,8 +1382,11 @@ function shoppingReviewKey(item) {
 function currentShoppingReviewSource() {
   return mergedShoppingItems().map(item => ({
     key: shoppingReviewKey(item),
+    sourceKeys: item.sourceKeys || [shoppingReviewKey(item)],
     name: item.name,
-    quantity: formatQty(item)
+    quantity: formatQty(item),
+    mergedBy: item.mergedBy || '',
+    sourceLines: item.sourceLines || []
   }));
 }
 
@@ -1360,7 +1411,9 @@ function serializeShoppingReviewDraft() {
     originalQuantity: row.dataset.originalQuantity || '',
     nameEdited: row.dataset.nameEdited === 'true',
     quantityEdited: row.dataset.quantityEdited === 'true',
-    ignored: row.classList.contains('is-ignored')
+    ignored: row.classList.contains('is-ignored'),
+    mergedBy: row.dataset.mergedBy || '',
+    sourceLines: JSON.parse(row.dataset.sourceLines || '[]')
   }));
   return {
     schema: 'meal-planner.shopping-review.v1',
@@ -1408,15 +1461,23 @@ function reconcileShoppingReviewDraft(source, draft) {
     const currentItems = sourceKeys.map(key => sourceMap.get(key));
     const currentQuantity = mergeReviewQuantities(currentItems.map(item => item.quantity));
     const fallbackName = currentItems[0]?.name || saved.name || '';
+    const mergedBy = saved.mergedBy === 'user'
+      ? 'user'
+      : (currentItems.some(item => item.mergedBy === 'app') ? 'app' : '');
+    const sourceLines = saved.mergedBy === 'user'
+      ? (saved.sourceLines || [])
+      : currentItems.flatMap(item => item.sourceLines || []);
     rows.push({
       sourceKeys,
       name: saved.nameEdited || sourceKeys.length > 1 ? saved.name : fallbackName,
       quantity: saved.quantityEdited ? saved.quantity : currentQuantity,
       originalName: fallbackName,
       originalQuantity: currentQuantity,
-      nameEdited: !!saved.nameEdited || sourceKeys.length > 1,
+      nameEdited: !!saved.nameEdited || saved.mergedBy === 'user',
       quantityEdited: !!saved.quantityEdited,
-      ignored: !!saved.ignored
+      ignored: !!saved.ignored,
+      mergedBy,
+      sourceLines
     });
   }
 
@@ -1430,7 +1491,9 @@ function reconcileShoppingReviewDraft(source, draft) {
       originalQuantity: item.quantity,
       nameEdited: false,
       quantityEdited: false,
-      ignored: false
+      ignored: false,
+      mergedBy: item.mergedBy || '',
+      sourceLines: item.sourceLines || []
     });
   }
   return rows;
@@ -1476,13 +1539,27 @@ function addShoppingReviewRow(item, options = {}) {
   row.dataset.originalQuantity = options.originalQuantity ?? parsed.originalQuantity ?? parsed.quantity ?? '';
   row.dataset.nameEdited = String(options.nameEdited ?? parsed.nameEdited ?? false);
   row.dataset.quantityEdited = String(options.quantityEdited ?? parsed.quantityEdited ?? false);
+  row.dataset.mergedBy = options.mergedBy ?? parsed.mergedBy ?? '';
+  row.dataset.sourceLines = JSON.stringify(options.sourceLines ?? parsed.sourceLines ?? []);
+  const mergeBadge = row.dataset.mergedBy === 'app'
+    ? '<span class="shopping-merge-badge app-merged">App merged</span>'
+    : row.dataset.mergedBy === 'user'
+      ? '<span class="shopping-merge-badge user-merged">You merged</span>'
+      : '';
+  const sourceLines = JSON.parse(row.dataset.sourceLines || '[]');
+  const sourceDetail = row.dataset.mergedBy && sourceLines.length > 1
+    ? `<details class="shopping-merge-detail"><summary>${sourceLines.length} original entries</summary><div>${sourceLines.map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div></details>`
+    : '';
   row.innerHTML = `
     <label class="shopping-review-select">
       <input class="shopping-review-checkbox" type="checkbox" aria-label="Select shopping item for merge">
     </label>
-    <div class="shopping-review-fields">
-      <input class="shopping-review-name" value="${escapeHtml(parsed.name || '')}" aria-label="Ingredient" placeholder="Ingredient">
-      <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity || '')}" aria-label="Quantity" placeholder="Quantity">
+    <div class="shopping-review-content">
+      <div class="shopping-review-fields">
+        <input class="shopping-review-name" value="${escapeHtml(parsed.name || '')}" aria-label="Ingredient" placeholder="Ingredient">
+        <input class="shopping-review-qty" value="${escapeHtml(parsed.quantity || '')}" aria-label="Quantity" placeholder="Quantity">
+      </div>
+      <div class="shopping-review-meta">${mergeBadge}${sourceDetail}</div>
     </div>
     <button type="button" class="shopping-review-ignore" aria-pressed="false">Ignore</button>
     <button type="button" class="shopping-review-remove" aria-label="Remove">×</button>`;
@@ -1617,7 +1694,8 @@ function mergeSelectedShoppingRows() {
   const parsed = rows.map(row => ({
     name: row.querySelector('.shopping-review-name')?.value.trim() || '',
     quantity: row.querySelector('.shopping-review-qty')?.value.trim() || '',
-    sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]')
+    sourceKeys: JSON.parse(row.dataset.sourceKeys || '[]'),
+    sourceLines: JSON.parse(row.dataset.sourceLines || '[]')
   }));
   const suggestedName = parsed[0]?.name || 'Merged item';
   const customName = prompt('Name the merged shopping item:', suggestedName);
@@ -1633,8 +1711,15 @@ function mergeSelectedShoppingRows() {
   firstRow.dataset.originalQuantity = mergedQuantity;
   firstRow.dataset.nameEdited = 'true';
   firstRow.dataset.quantityEdited = 'false';
+  firstRow.dataset.mergedBy = 'user';
+  const mergedSourceLines = parsed.flatMap(item => item.sourceLines?.length ? item.sourceLines : [`${item.name}${item.quantity ? ` — ${item.quantity}` : ''}`]);
+  firstRow.dataset.sourceLines = JSON.stringify(mergedSourceLines);
   firstRow.querySelector('.shopping-review-name').value = name;
   firstRow.querySelector('.shopping-review-qty').value = mergedQuantity;
+  const meta = firstRow.querySelector('.shopping-review-meta');
+  if (meta) {
+    meta.innerHTML = `<span class="shopping-merge-badge user-merged">You merged</span><details class="shopping-merge-detail"><summary>${mergedSourceLines.length} original entries</summary><div>${mergedSourceLines.map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div></details>`;
+  }
   firstRow.querySelector('.shopping-review-checkbox').checked = false;
   rows.slice(1).forEach(row => row.remove());
   updateShoppingMergeToolbar();

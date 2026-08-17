@@ -1,14 +1,10 @@
-# Meal Planner V1.7 Beta 6
+# Meal Planner V1.7 Beta 7
 
-## Shopping behavior
-- Removed all automatic/fuzzy ingredient-name merging.
-- Shopping now keeps one generated row per scheduled recipe ingredient.
-- Only explicit user-selected **Merge selected** combines rows.
-- Alphabetical sorting remains for review, but rows no longer re-sort while the user is typing. A renamed row re-sorts after the edit field is committed/blurred.
-- Automatic similar-name highlighting was removed.
-- Manual merge still combines compatible quantities because the user explicitly requested that merge.
-
-## Preserved
-- Review autosave/resume, Ignore/Use, Reset to generated list, and manual merge.
-- V1.7 planner modes and consecutive dinner-repeat option.
-- Firebase/App Check configuration unchanged.
+Shopping review changes:
+- Automatic merge restored only for exact normalized ingredient-name + exact normalized-unit matches.
+- Automatically merged rows are tagged **App merged**.
+- Manual merges are tagged **You merged**.
+- Merged rows expose the original ingredient entries so absorbed rows remain visible/auditable.
+- Ignored rows remain visible in the review, as before.
+- Merge Selected is fixed above the bottom action bar so it remains reachable throughout the full scrolling list.
+- No fuzzy/similar-name automatic merging.

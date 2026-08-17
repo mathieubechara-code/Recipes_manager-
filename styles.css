@@ -1571,3 +1571,52 @@ main {
   }
   .shopping-review-actions button { min-height: 46px; }
 }
+
+
+/* V1.7 beta 7 — exact-match app merges + persistent manual merge control */
+.shopping-review-row {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+}
+.shopping-review-content { min-width: 0; display: grid; gap: 6px; }
+.shopping-review-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; min-height: 0; }
+.shopping-merge-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
+.shopping-merge-badge.app-merged { background: #e8efe4; color: #496247; }
+.shopping-merge-badge.user-merged { background: #eee7f5; color: #65507e; }
+.shopping-merge-detail { margin: 0; color: var(--muted); font-size: .7rem; }
+.shopping-merge-detail summary { cursor: pointer; font-weight: 700; }
+.shopping-merge-detail > div { display: grid; gap: 2px; margin-top: 4px; }
+.shopping-merge-detail span { display: block; }
+
+/* Fixed to the viewport while Review is open, so it remains reachable anywhere in the list. */
+.shopping-review-floating {
+  position: fixed !important;
+  left: 50%;
+  right: auto;
+  bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  transform: translate(-50%, 10px) !important;
+  z-index: 1002;
+  margin: 0 !important;
+  box-shadow: 0 10px 30px rgba(47,49,44,.18);
+}
+.shopping-review-floating.is-visible {
+  transform: translate(-50%, 0) !important;
+}
+.shopping-review-list { padding-bottom: 128px; }
+
+@media (max-width: 620px) {
+  .shopping-review-floating {
+    bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+    max-width: calc(100% - 28px);
+  }
+  .shopping-review-list { padding-bottom: 120px; }
+}
