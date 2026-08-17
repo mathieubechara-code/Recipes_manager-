@@ -1736,10 +1736,12 @@ function selectedShoppingReviewRows() {
 function updateShoppingMergeToolbar() {
   if (!els.mergeSelectedShopping) return;
   const count = selectedShoppingReviewRows().length;
+  const floating = els.mergeSelectedShopping.closest('.shopping-review-floating');
   els.mergeSelectedShopping.disabled = count < 2;
   els.mergeSelectedShopping.textContent = count < 2 ? 'Merge selected' : `Merge selected (${count})`;
+  floating?.classList.toggle('is-visible', count >= 2);
   if (els.shoppingMergeSelectionCount) {
-    els.shoppingMergeSelectionCount.textContent = count < 2 ? 'Select 2+ items' : `${count} selected`;
+    els.shoppingMergeSelectionCount.textContent = count < 2 ? '' : `${count} selected`;
   }
 }
 
@@ -3281,9 +3283,7 @@ function wireUi() {
   );
 
   els.reviewShopping?.addEventListener('click', openShoppingReview);
-  els.copyReviewedShopping?.addEventListener('click', copyReviewedShopping);
   els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
-  els.saveShoppingDraft?.addEventListener('click', () => saveShoppingReviewDraft(true));
   els.resetShoppingReview?.addEventListener('click', resetShoppingReviewToGenerated);
   els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
 

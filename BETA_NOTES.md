@@ -37,3 +37,12 @@ No Firestore migration is required. Do not replace `firebase-config.js` or `fire
 - Main navigation is now a floating bottom dock instead of occupying the top of the content.
 - Added **Reset to generated list** in Shopping Review. It clears the current week's review edits/ignores/merges/removals and rebuilds from the current meal plan.
 - Raised the floating **Merge selected** control above the sticky review actions so it no longer covers Save draft / Copy reviewed on iPhone.
+
+
+## Beta 5 UI polish
+- Shopping Review explanatory paragraph removed.
+- Draft remains automatic; explicit Save Draft control removed.
+- Copy Reviewed removed from the review modal.
+- Sticky action bar now contains only Close and Send to Reminders.
+- Merge control only appears after 2+ rows are selected and no longer permanently obscures list content.
+- Bottom navigation receives a slightly stronger sage tint and active-tab surface for easier detection without aggressive contrast.

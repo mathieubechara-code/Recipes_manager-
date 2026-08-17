@@ -13,7 +13,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1700b4" />
+  <link rel="stylesheet" href="styles.css?v=1700b5" />
 </head>
 <body>
   <div id="appShell">
@@ -390,7 +390,6 @@
         <div><p class="eyebrow">Before Reminders</p><h2>Review shopping list</h2></div>
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
-      <p class="muted small">Sorted A–Z automatically. Edit names or quantities, ignore what you already have, and select rows to merge. Similar neighboring names are softly highlighted as possible matches.</p>
       <div class="shopping-draft-line">
         <span id="shoppingDraftStatus" class="muted small">Autosaves while you review</span>
         <button id="resetShoppingReview" type="button" class="text-button shopping-reset-button">Reset to generated list</button>
@@ -400,10 +399,7 @@
         <span id="shoppingMergeSelectionCount" class="small">Select 2+ items</span>
         <button id="mergeSelectedShopping" type="button" class="primary" disabled>Merge selected</button>
       </div>
-      <div class="dialog-actions wrap shopping-review-actions">
-        <button id="saveShoppingDraft" type="button" class="secondary">Save draft</button>
-        <button id="copyReviewedShopping" type="button" class="secondary">Copy reviewed</button>
-        <span class="spacer"></span>
+      <div class="dialog-actions shopping-review-actions">
         <button type="button" class="secondary close-dialog">Close</button>
         <button id="sendReviewedShopping" type="button" class="primary">Send to Reminders</button>
       </div>
@@ -430,6 +426,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1700b4"></script>
+  <script type="module" src="app.js?v=1700b5"></script>
 </body>
 </html>

@@ -1501,3 +1501,77 @@ main {
     max-width: calc(100% - 28px);
   }
 }
+
+
+/* V1.7 beta 5 — compact shopping review + clearer bottom navigation */
+.mockup-tabs {
+  background: rgba(229, 237, 224, .97);
+  border-color: rgba(117, 134, 107, .32);
+  box-shadow: 0 12px 34px rgba(47,49,44,.20), 0 0 0 1px rgba(117,134,107,.08);
+}
+.mockup-tabs .tab { color: #5d6759; }
+.mockup-tabs .tab.active {
+  color: #244f35;
+  background: rgba(255,255,255,.58);
+  border-radius: 15px;
+}
+.mockup-tabs .tab.active::after { background: #3c754a; }
+
+.shopping-review-dialog { padding-bottom: 0; }
+.shopping-review-list { padding-bottom: 112px; }
+.shopping-review-floating {
+  position: sticky;
+  bottom: 70px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 10px auto 0;
+  padding: 7px 8px 7px 12px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+}
+.shopping-review-floating.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.shopping-review-floating #shoppingMergeSelectionCount { white-space: nowrap; }
+.shopping-review-floating button { padding: 9px 13px; }
+
+.shopping-review-actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+  margin: 0 -20px -20px;
+  padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255,253,248,.98);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 20px rgba(55,45,30,.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.shopping-review-actions button {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+@media (max-width: 620px) {
+  .shopping-review-list { padding-bottom: 104px; }
+  .shopping-review-floating {
+    bottom: 66px;
+    max-width: calc(100% - 22px);
+  }
+  .shopping-review-actions {
+    margin-left: -20px;
+    margin-right: -20px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .shopping-review-actions button { min-height: 46px; }
+}
