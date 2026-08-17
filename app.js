@@ -1711,6 +1711,22 @@ function addShoppingReviewRow(item, options = {}) {
   setIgnored(!!(options.ignored ?? parsed.ignored));
 }
 
+function resetShoppingReviewToGenerated() {
+  if (!els.shoppingReviewList) return;
+  const confirmed = confirm('Reset this review to the shopping list generated from the current meal plan? Your manual edits, ignores, merges and removals for this review will be cleared.');
+  if (!confirmed) return;
+
+  localStorage.removeItem(shoppingDraftStorageKey());
+  shoppingReviewRemovedKeys = new Set();
+  shoppingReviewSource = currentShoppingReviewSource();
+  els.shoppingReviewList.innerHTML = '';
+  shoppingReviewSource.forEach(item => addShoppingReviewRow(item));
+  sortShoppingReviewRows();
+  updateShoppingMergeToolbar();
+  if (els.shoppingDraftStatus) els.shoppingDraftStatus.textContent = 'Reset to current generated list · autosave active';
+  toast('Shopping review reset');
+}
+
 function selectedShoppingReviewRows() {
   return [...els.shoppingReviewList.querySelectorAll('.shopping-review-row')]
     .filter(row => !row.classList.contains('is-ignored'))
@@ -3268,6 +3284,7 @@ function wireUi() {
   els.copyReviewedShopping?.addEventListener('click', copyReviewedShopping);
   els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
   els.saveShoppingDraft?.addEventListener('click', () => saveShoppingReviewDraft(true));
+  els.resetShoppingReview?.addEventListener('click', resetShoppingReviewToGenerated);
   els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
 
   els.runShortcut.addEventListener(

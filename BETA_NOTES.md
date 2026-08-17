@@ -31,3 +31,9 @@ No Firestore migration is required. Do not replace `firebase-config.js` or `fire
 - Ignored rows are kept after active rows.
 - Renaming or merging an item automatically re-sorts the list.
 - Adjacent ingredient names that look similar (for example Oil / Olive oil) receive a subtle visual highlight so the user can decide whether to merge them.
+
+## Beta 4 — Bottom navigation + Shopping Review reset
+
+- Main navigation is now a floating bottom dock instead of occupying the top of the content.
+- Added **Reset to generated list** in Shopping Review. It clears the current week's review edits/ignores/merges/removals and rebuilds from the current meal plan.
+- Raised the floating **Merge selected** control above the sticky review actions so it no longer covers Save draft / Copy reviewed on iPhone.

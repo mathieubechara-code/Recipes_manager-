@@ -1423,3 +1423,81 @@ main { padding-top: 8px; }
 .shopping-review-row.is-ignored {
   order: 2;
 }
+
+/* V1.7 beta 4 — floating bottom navigation + safer shopping review controls */
+main {
+  padding-bottom: calc(126px + env(safe-area-inset-bottom));
+}
+
+/* Main navigation now behaves like a floating iPhone-style bottom dock. */
+.mockup-tabs {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 60;
+  width: min(620px, calc(100% - 24px));
+  height: 64px;
+  margin: 0;
+  border-radius: 20px;
+  box-shadow: 0 14px 38px rgba(47,49,44,.18);
+  background: rgba(255,253,248,.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.mockup-tabs .tab.active::after {
+  bottom: 3px;
+  left: 22%;
+  right: 22%;
+}
+
+.shopping-draft-line {
+  justify-content: space-between;
+  gap: 12px;
+}
+.shopping-reset-button {
+  flex: 0 0 auto;
+  font-size: .78rem;
+  white-space: nowrap;
+}
+
+/* Leave guaranteed visual space between the floating Merge pill and the sticky action dock. */
+.shopping-review-list {
+  padding-bottom: 172px;
+}
+.shopping-review-floating {
+  bottom: calc(94px + env(safe-area-inset-bottom));
+  z-index: 14;
+  margin-bottom: 12px;
+}
+.shopping-review-actions {
+  z-index: 20;
+  box-shadow: 0 -10px 28px rgba(55,45,30,.06);
+}
+
+@media (max-width: 620px) {
+  main {
+    padding-bottom: calc(118px + env(safe-area-inset-bottom));
+  }
+  .mockup-tabs {
+    width: calc(100% - 18px);
+    height: 60px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    border-radius: 18px;
+  }
+  .shopping-draft-line {
+    align-items: flex-start;
+  }
+  .shopping-reset-button {
+    font-size: .72rem;
+  }
+  .shopping-review-list {
+    padding-bottom: 226px;
+  }
+  .shopping-review-floating {
+    bottom: calc(154px + env(safe-area-inset-bottom));
+    max-width: calc(100% - 28px);
+  }
+}
