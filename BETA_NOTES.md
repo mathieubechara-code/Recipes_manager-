@@ -1,11 +1,8 @@
-# Meal Planner V1.7 Beta 9
+# Meal Planner V1.7 Beta 10
 
-## Shopping Review undo
+UI cleanup only, based on V1.7 Beta 9.
 
-- Adds a compact **Undo** control beside **Reset** in Shopping Review.
-- Undo reverses the last review-list change: ingredient rename, quantity edit, Ignore/Use, manual merge, or Reset.
-- Keeps up to 30 undo steps for the currently open review.
-- Undo history intentionally resets when the review is reopened or the Not sent / All view changes. Autosaved draft behavior is unchanged.
-- Reset still returns the review to the list generated from the current meal plan and can itself be undone while the review remains open.
-
-Cache version: `1700b9`.
+- Shopping Review Undo and Reset controls are larger and easier to tap while staying compact.
+- Removed the Week helper sentence: “Suggest meals for the whole week or only selected days. You can also clear every lunch and dinner shown in this week.”
+- No planner, shopping, Firebase, or Reminders logic changed.
+- Cache-busting updated to `1700b10`.

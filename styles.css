@@ -1715,3 +1715,28 @@ main {
   .shopping-draft-tools { gap: 2px; }
   .shopping-mini-button { padding-inline: 4px; font-size: .64rem; }
 }
+
+/* V1.7 Beta 10 — clearer Shopping Review history controls */
+.shopping-draft-tools {
+  gap: 8px;
+}
+.shopping-mini-button {
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid rgba(88, 102, 80, .22);
+  border-radius: 10px;
+  background: #f1f5ec;
+  font-size: .78rem;
+  line-height: 1;
+}
+.shopping-mini-button:not(:disabled):active {
+  transform: translateY(1px);
+}
+@media (max-width: 430px) {
+  .shopping-draft-tools { gap: 6px; }
+  .shopping-mini-button {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: .75rem;
+  }
+}
