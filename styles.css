@@ -1674,3 +1674,44 @@ main {
 .shopping-review-row.is-sent .shopping-review-ignore {
   display: none;
 }
+
+
+/* V1.7 Beta 9 — compact Shopping Review Undo / Reset */
+.shopping-draft-line {
+  gap: 10px;
+}
+.shopping-draft-tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.shopping-mini-button {
+  margin: 0;
+  padding: 4px 6px;
+  min-height: 0;
+  border-radius: 8px;
+  color: var(--sage-dark);
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.shopping-mini-button:disabled {
+  opacity: .36;
+  cursor: default;
+}
+@media (max-width: 430px) {
+  .shopping-draft-line {
+    align-items: center;
+  }
+  .shopping-draft-line > #shoppingDraftStatus {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shopping-draft-tools { gap: 2px; }
+  .shopping-mini-button { padding-inline: 4px; font-size: .64rem; }
+}

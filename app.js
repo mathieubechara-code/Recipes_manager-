@@ -25,7 +25,7 @@ import {
 
 import { firebaseConfig } from './firebase-config.js';
 
-const APP_BUILD = '1.7.0-beta.2';
+const APP_BUILD = '1.7.0-beta.9';
 
 
 const els = Object.fromEntries(
@@ -70,6 +70,8 @@ let shoppingReviewRemovedKeys = new Set(); // legacy drafts only; no X/remove ac
 let shoppingReviewAutosaveTimer = null;
 let shoppingReviewSortTimer = null;
 let shoppingReviewMode = 'unsent';
+let shoppingReviewUndoStack = [];
+const SHOPPING_REVIEW_UNDO_LIMIT = 30;
 let recipeEditorServings = 2;
 let slotPeopleSaveTimer = null;
 
@@ -1445,6 +1447,52 @@ function currentShoppingReviewSource(mode = shoppingReviewMode) {
   }));
 }
 
+function shoppingReviewSnapshot() {
+  if (!els.shoppingReviewList) return null;
+  return serializeShoppingReviewDraft();
+}
+
+function updateShoppingUndoButton() {
+  if (!els.undoShoppingReview) return;
+  const count = shoppingReviewUndoStack.length;
+  els.undoShoppingReview.disabled = count === 0;
+  els.undoShoppingReview.textContent = count ? `↶ Undo` : '↶ Undo';
+  els.undoShoppingReview.title = count ? `${count} change${count === 1 ? '' : 's'} available` : 'Nothing to undo';
+}
+
+function pushShoppingReviewUndoPoint() {
+  const snapshot = shoppingReviewSnapshot();
+  if (!snapshot) return;
+  const serialized = JSON.stringify(snapshot);
+  const previous = shoppingReviewUndoStack.at(-1);
+  if (previous && previous.serialized === serialized) return;
+  shoppingReviewUndoStack.push({ serialized, snapshot });
+  if (shoppingReviewUndoStack.length > SHOPPING_REVIEW_UNDO_LIMIT) shoppingReviewUndoStack.shift();
+  updateShoppingUndoButton();
+}
+
+function clearShoppingReviewUndoHistory() {
+  shoppingReviewUndoStack = [];
+  updateShoppingUndoButton();
+}
+
+function restoreShoppingReviewSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.rows) || !els.shoppingReviewList) return;
+  els.shoppingReviewList.innerHTML = '';
+  snapshot.rows.forEach(item => addShoppingReviewRow(item, item));
+  sortShoppingReviewRows();
+  updateShoppingMergeToolbar();
+  saveShoppingReviewDraft(false);
+}
+
+function undoShoppingReviewChange() {
+  const entry = shoppingReviewUndoStack.pop();
+  if (!entry) return;
+  restoreShoppingReviewSnapshot(entry.snapshot);
+  updateShoppingUndoButton();
+  toast('Last shopping change undone');
+}
+
 function loadShoppingReviewDraft() {
   try {
     const raw = localStorage.getItem(shoppingDraftStorageKey());
@@ -1602,6 +1650,7 @@ function renderShoppingReviewForMode(mode = shoppingReviewMode, options = {}) {
 
 function openShoppingReview() {
   shoppingReviewMode = 'unsent';
+  clearShoppingReviewUndoHistory();
   if (!rawShoppingEntries().length) return toast('Shopping list is empty');
   renderShoppingReviewForMode('unsent');
   const draft = loadShoppingReviewDraft();
@@ -1663,7 +1712,15 @@ function addShoppingReviewRow(item, options = {}) {
   checkbox.checked = !!options.selected;
   checkbox.addEventListener('change', updateShoppingMergeToolbar);
 
+  let nameUndoCaptured = false;
+  let qtyUndoCaptured = false;
+  nameInput.addEventListener('focus', () => { nameUndoCaptured = false; });
+  qtyInput.addEventListener('focus', () => { qtyUndoCaptured = false; });
   nameInput.addEventListener('input', () => {
+    if (!nameUndoCaptured) {
+      pushShoppingReviewUndoPoint();
+      nameUndoCaptured = true;
+    }
     row.dataset.nameEdited = String(nameInput.value.trim() !== row.dataset.originalName);
     scheduleShoppingReviewAutosave();
   });
@@ -1671,12 +1728,17 @@ function addShoppingReviewRow(item, options = {}) {
   // ingredient field loses focus / the edit is committed.
   nameInput.addEventListener('change', sortShoppingReviewRows);
   qtyInput.addEventListener('input', () => {
+    if (!qtyUndoCaptured) {
+      pushShoppingReviewUndoPoint();
+      qtyUndoCaptured = true;
+    }
     row.dataset.quantityEdited = String(qtyInput.value.trim() !== row.dataset.originalQuantity);
     scheduleShoppingReviewAutosave();
   });
 
-  const setIgnored = ignored => {
+  const setIgnored = (ignored, recordUndo = true) => {
     if (rowIsSent) return;
+    if (recordUndo) pushShoppingReviewUndoPoint();
     row.classList.toggle('is-ignored', ignored);
     ignore.textContent = ignored ? 'Use' : 'Ignore';
     ignore.setAttribute('aria-pressed', String(ignored));
@@ -1686,10 +1748,10 @@ function addShoppingReviewRow(item, options = {}) {
     scheduleShoppingReviewAutosave();
     sortShoppingReviewRows();
   };
-  ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored')));
+  ignore.addEventListener('click', () => setIgnored(!row.classList.contains('is-ignored'), true));
 
   els.shoppingReviewList.appendChild(row);
-  if (!rowIsSent) setIgnored(!!(options.ignored ?? parsed.ignored));
+  if (!rowIsSent) setIgnored(!!(options.ignored ?? parsed.ignored), false);
 }
 
 function resetShoppingReviewToGenerated() {
@@ -1697,6 +1759,7 @@ function resetShoppingReviewToGenerated() {
   const confirmed = confirm('Reset this review to the shopping list generated from the current meal plan? Your manual edits, ignores and merges for this review will be cleared.');
   if (!confirmed) return;
 
+  pushShoppingReviewUndoPoint();
   localStorage.removeItem(shoppingDraftStorageKey());
   shoppingReviewRemovedKeys = new Set();
   shoppingReviewSource = currentShoppingReviewSource();
@@ -1792,6 +1855,7 @@ function mergeSelectedShoppingRows() {
   const name = customName.trim();
   if (!name) return toast('Enter a name for the merged item');
 
+  pushShoppingReviewUndoPoint();
   const mergedQuantity = mergeReviewQuantities(parsed.map(item => item.quantity));
   const firstRow = rows[0];
   const sourceKeys = [...new Set(parsed.flatMap(item => item.sourceKeys))];
@@ -3316,9 +3380,11 @@ function wireUi() {
 
   els.reviewShopping?.addEventListener('click', openShoppingReview);
   els.mergeSelectedShopping?.addEventListener('click', mergeSelectedShoppingRows);
+  els.undoShoppingReview?.addEventListener('click', undoShoppingReviewChange);
   els.resetShoppingReview?.addEventListener('click', resetShoppingReviewToGenerated);
   els.shoppingReviewMode?.addEventListener('change', () => {
     saveShoppingReviewDraft(false);
+    clearShoppingReviewUndoHistory();
     renderShoppingReviewForMode(els.shoppingReviewMode.value, { keepOpen: true });
   });
   els.sendReviewedShopping?.addEventListener('click', sendReviewedShopping);
