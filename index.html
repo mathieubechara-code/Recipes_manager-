@@ -13,7 +13,7 @@
   <link rel="icon" href="favicon-32.png?v=1615" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1615" sizes="180x180" />
   <link rel="manifest" href="site.webmanifest?v=1615" />
-  <link rel="stylesheet" href="styles.css?v=1700b10" />
+  <link rel="stylesheet" href="styles.css?v=1700b11" />
 </head>
 <body>
   <div id="appShell">
@@ -146,7 +146,6 @@
             </div>
           </div>
           <div class="card shopping-actions">
-            <p class="muted">Quantities are scaled for the number of people, then compatible units and common ingredient aliases are merged for the visible week.</p>
             <div class="button-row">
               <button id="copyShopping" class="secondary">Copy list</button>
               <button id="reviewShopping" class="secondary">Review list</button>
@@ -369,15 +368,13 @@
         <button type="button" class="icon-button close-dialog" aria-label="Close">×</button>
       </div>
       <div class="how-to-steps">
-        <section><span class="how-to-number">1</span><div><strong>Plan your week</strong><p class="muted small">Open Week → Plan week to suggest lunches, dinners, or both.</p></div></section>
-        <section><span class="how-to-number">2</span><div><strong>Keep meals you like</strong><p class="muted small">Tap 🔒 on a scheduled meal. Locked meals stay exactly as they are.</p></div></section>
-        <section><span class="how-to-number">3</span><div><strong>Change one suggestion</strong><p class="muted small">Tap ↻ beside a meal to replace only that lunch or dinner with another eligible recipe.</p></div></section>
-        <section><span class="how-to-number">4</span><div><strong>Regenerate the rest</strong><p class="muted small">Tap “Regenerate unlocked” to replace all scheduled meals in the visible week except the ones you locked.</p></div></section>
-        <section><span class="how-to-number">5</span><div><strong>Use Today for daily cooking</strong><p class="muted small">Open Today to see lunch and dinner, move to previous/next days, and open the full recipe.</p></div></section>
-      </div>
-      <div class="how-to-example card">
-        <strong>Example</strong>
-        <p class="small">You like Monday Salmon and Thursday Burrito → lock them 🔒 → tap Regenerate unlocked → Meal Planner changes the other meals only.</p>
+        <section><span class="how-to-number">1</span><div><strong>Add recipes</strong><p class="muted small">Recipes → + Add, or Paste recipe to import from Notes. Set servings, timing and Lunch/Dinner suitability.</p></div></section>
+        <section><span class="how-to-number">2</span><div><strong>Plan the week</strong><p class="muted small">Week → Plan week. Choose lunch, dinner or both, then choose the generation pattern and days.</p></div></section>
+        <section><span class="how-to-number">3</span><div><strong>Adjust the plan</strong><p class="muted small">Lock meals you want to keep. Regenerate or change individual meals as needed.</p></div></section>
+        <section><span class="how-to-number">4</span><div><strong>Cook from Today</strong><p class="muted small">Today shows lunch and dinner. Open a recipe for Ingredients and step-by-step cooking.</p></div></section>
+        <section><span class="how-to-number">5</span><div><strong>Review shopping</strong><p class="muted small">Shopping → Review. Edit quantities or names, Ignore items you already have, or manually Merge exact items.</p></div></section>
+        <section><span class="how-to-number">6</span><div><strong>Fix mistakes</strong><p class="muted small">Use Undo for the last change or Reset to rebuild the generated list. Your review autosaves.</p></div></section>
+        <section><span class="how-to-number">7</span><div><strong>Send to Reminders</strong><p class="muted small">Send not sent to Reminders. Sent items are tracked so newly planned meals can be reviewed separately later.</p></div></section>
       </div>
       <div class="dialog-actions"><span class="spacer"></span><button type="button" class="primary close-dialog">Got it</button></div>
     </div>
@@ -435,6 +432,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=1700b10"></script>
+  <script type="module" src="app.js?v=1700b11"></script>
 </body>
 </html>

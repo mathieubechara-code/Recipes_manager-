@@ -1,8 +1,8 @@
-# Meal Planner V1.7 Beta 10
+# Meal Planner V1.7 Beta 11
 
-UI cleanup only, based on V1.7 Beta 9.
+UI/help cleanup only.
 
-- Shopping Review Undo and Reset controls are larger and easier to tap while staying compact.
-- Removed the Week helper sentence: “Suggest meals for the whole week or only selected days. You can also clear every lunch and dinner shown in this week.”
-- No planner, shopping, Firebase, or Reminders logic changed.
-- Cache-busting updated to `1700b10`.
+- Removed the Shopping-tab explanatory quantity/merge sentence.
+- Rewrote “How to use” as a concise end-to-end 7-step guide: recipes → planning → adjustments → cooking → shopping review → undo/reset → Reminders.
+- Removed the redundant example block from the guide.
+- Cache version: `1700b11`.
